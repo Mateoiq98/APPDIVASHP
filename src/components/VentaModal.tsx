@@ -21,6 +21,32 @@ export default function VentaModal({ onClose, onSuccess }: Props) {
   const [items, setItems] = useState<ItemSeleccionado[]>([])
   const [loading, setLoading] = useState(false)
   const [filtroCat, setFiltroCat] = useState('')
+  const [creandoCliente, setCreandoCliente] = useState(false)
+  const [nuevoClienteNombre, setNuevoClienteNombre] = useState('')
+  const [nuevoClienteTel, setNuevoClienteTel] = useState('')
+
+  const handleCreateCliente = async () => {
+    if (!nuevoClienteNombre.trim()) return
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('clientes')
+      .insert({ nombre: nuevoClienteNombre.trim(), telefono: nuevoClienteTel.trim() })
+      .select()
+    
+    setLoading(false)
+    if (error) {
+      alert('Error al crear clienta: ' + error.message)
+      return
+    }
+    if (data && data[0]) {
+      setClientes(prev => [...prev, data[0]].sort((a, b) => a.nombre.localeCompare(b.nombre)))
+      setClienteId(data[0].id)
+      setCreandoCliente(false)
+      setNuevoClienteNombre('')
+      setNuevoClienteTel('')
+      alert('Clienta agregada con éxito')
+    }
+  }
 
   const CATEGORIAS = [
     'Prendas superiores', 'Prendas inferiores', 'Vestidos y enterizos',
@@ -119,14 +145,52 @@ export default function VentaModal({ onClose, onSuccess }: Props) {
       <div className="modal-content" onClick={e => e.stopPropagation()}>
         <h2>Nueva Venta</h2>
 
-        <div className="form-group">
-          <label>Clienta</label>
-          <select value={clienteId} onChange={e => setClienteId(e.target.value)}>
-            <option value="">Seleccionar clienta...</option>
-            {clientes.map(c => (
-              <option key={c.id} value={c.id}>{c.nombre}</option>
-            ))}
-          </select>
+        <div className="form-group" style={{ background: 'rgba(133,113,122,0.04)', padding: 12, borderRadius: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <label style={{ margin: 0 }}>Clienta</label>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setCreandoCliente(!creandoCliente)}
+              style={{ minHeight: 28, minWidth: 70, height: 28, fontSize: 12, padding: '0 8px' }}
+            >
+              {creandoCliente ? 'Elegir Existente' : '+ Nueva clienta'}
+            </button>
+          </div>
+
+          {!creandoCliente ? (
+            <select value={clienteId} onChange={e => setClienteId(e.target.value)}>
+              <option value="">Seleccionar clienta...</option>
+              {clientes.map(c => (
+                <option key={c.id} value={c.id}>{c.nombre}</option>
+              ))}
+            </select>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <input
+                value={nuevoClienteNombre}
+                onChange={e => setNuevoClienteNombre(e.target.value)}
+                placeholder="Nombre de la nueva clienta"
+                style={{ minHeight: 38, fontSize: 14 }}
+              />
+              <input
+                value={nuevoClienteTel}
+                onChange={e => setNuevoClienteTel(e.target.value)}
+                placeholder="Teléfono (Ej. 3001234567)"
+                type="tel"
+                style={{ minHeight: 38, fontSize: 14 }}
+              />
+              <button
+                type="button"
+                className="btn-success"
+                onClick={handleCreateCliente}
+                disabled={loading || !nuevoClienteNombre.trim()}
+                style={{ minHeight: 34, height: 34, fontSize: 12, padding: '0 12px', width: '100%' }}
+              >
+                Guardar Clienta Nueva
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="form-group">

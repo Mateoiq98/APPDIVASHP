@@ -7,6 +7,7 @@ export interface Producto {
   precio_costo: number
   precio_venta: number
   stock: number
+  imagen?: string
   created_at: string
 }
 

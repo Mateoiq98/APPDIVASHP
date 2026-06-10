@@ -23,6 +23,47 @@ const CATEGORIA_LABELS: Record<string, string> = {
   'Calzado y Accesorios': 'Accesorios/Calzado',
 }
 
+// Helper para comprimir la imagen del lado del cliente
+const compressImage = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.readAsDataURL(file)
+    reader.onload = (event) => {
+      const img = new Image()
+      img.src = event.target?.result as string
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        const MAX_WIDTH = 500
+        const MAX_HEIGHT = 500
+        let width = img.width
+        let height = img.height
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width
+            width = MAX_WIDTH
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height
+            height = MAX_HEIGHT
+          }
+        }
+
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        ctx?.drawImage(img, 0, 0, width, height)
+        
+        // Exportar a JPEG con calidad reducida
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.6)
+        resolve(dataUrl)
+      }
+    }
+    reader.onerror = (error) => reject(error)
+  })
+}
+
 export default function Inventory() {
   const [productos, setProductos] = useState<Producto[]>([])
   const [filtroStock, setFiltroStock] = useState<'todos' | 'disponibles' | 'agotados'>('todos')
@@ -30,6 +71,9 @@ export default function Inventory() {
   const [busqueda, setBusqueda] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editando, setEditando] = useState<Producto | null>(null)
+  
+  // Estado para previsualizar foto grande
+  const [previewImage, setPreviewImage] = useState<string | null>(null)
 
   const load = async () => {
     const { data } = await supabase.from('productos').select('*').order('nombre')
@@ -110,12 +154,44 @@ export default function Inventory() {
                   ? '4px solid var(--color-error)' 
                   : isBajoStock 
                     ? '4px solid var(--color-alerta)' 
-                    : '4px solid var(--rosa-claro)'
+                    : '4px solid var(--rosa-claro)',
+                display: 'flex',
+                gap: 12,
+                alignItems: 'center'
               }}
             >
+              {/* Miniatura de la foto */}
+              <div
+                onClick={(e) => {
+                  if (p.imagen) {
+                    e.stopPropagation() // Evitar editar producto al ver foto
+                    setPreviewImage(p.imagen)
+                  }
+                }}
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 10,
+                  background: 'var(--gris-perla)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  flexShrink: 0,
+                  cursor: p.imagen ? 'zoom-in' : 'default',
+                  border: '1px solid rgba(234, 231, 231, 0.7)'
+                }}
+              >
+                {p.imagen ? (
+                  <img src={p.imagen} alt={p.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <PackageIcon />
+                )}
+              </div>
+
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                  <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--negro-elegante)' }}>{p.nombre}</span>
+                  <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--negro-elegante)' }}>{p.nombre}</span>
                   <span className={`badge ${isAgotado ? 'badge-danger' : isBajoStock ? 'badge-warning' : 'badge-success'}`}>
                     {isAgotado ? 'Agotado' : isBajoStock ? `${p.stock} uds (Bajo)` : `${p.stock} uds`}
                   </span>
@@ -134,7 +210,7 @@ export default function Inventory() {
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, borderTop: '1px solid rgba(234, 231, 231, 0.4)', paddingTop: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, borderTop: '1px solid rgba(234, 231, 231, 0.4)', paddingTop: 4 }}>
                   <span style={{ fontSize: 11, color: 'var(--sombra-malva)', opacity: 0.8, fontWeight: 500 }}>
                     {p.categoria}
                   </span>
@@ -149,7 +225,7 @@ export default function Inventory() {
         
         {filtrados.length === 0 && (
           <div className="empty-state">
-            <PackageIcon />
+            <PackageIconLarge />
             <p>No hay productos registrados</p>
           </div>
         )}
@@ -162,11 +238,49 @@ export default function Inventory() {
           onSuccess={() => { setShowForm(false); load() }}
         />
       )}
+
+      {/* VISUALIZADOR DE FOTO GRANDE (LIGHTBOX MODAL) */}
+      {previewImage && (
+        <div 
+          className="modal-overlay" 
+          onClick={() => setPreviewImage(null)} 
+          style={{ background: 'rgba(29, 25, 27, 0.9)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <div 
+            onClick={e => e.stopPropagation()} 
+            style={{ position: 'relative', maxWidth: '90%', maxHeight: '90%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+          >
+            <img 
+              src={previewImage} 
+              alt="Ampliada" 
+              style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 16, objectFit: 'contain', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }} 
+            />
+            <button 
+              className="btn-primary" 
+              onClick={() => setPreviewImage(null)} 
+              style={{ marginTop: 16, minHeight: 38, padding: '8px 24px', fontSize: 14 }}
+            >
+              Cerrar Foto
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 function PackageIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.4 }}>
+      <path d="M16.5 9.4 7.55 4.24" />
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+      <path d="m3.29 7 8.71 5 8.71-5" />
+      <path d="M12 22V12" />
+    </svg>
+  )
+}
+
+function PackageIconLarge() {
   return (
     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginBottom: 12 }}>
       <path d="M16.5 9.4 7.55 4.24" />
@@ -198,6 +312,10 @@ function ProductoForm({ producto, onClose, onSuccess }: { producto: Producto | n
   const [precioCosto, setPrecioCosto] = useState(producto?.precio_costo.toString() || '')
   const [precioVenta, setPrecioVenta] = useState(producto?.precio_venta.toString() || '')
   const [stock, setStock] = useState(producto?.stock.toString() || '0')
+  
+  // Estado para la imagen Base64 y carga
+  const [imagen, setImagen] = useState(producto?.imagen || '')
+  const [compressing, setCompressing] = useState(false)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -232,7 +350,9 @@ function ProductoForm({ producto, onClose, onSuccess }: { producto: Producto | n
       precio_costo: parseFloat(precioCosto) || 0,
       precio_venta: parseFloat(precioVenta),
       stock: parseInt(stock) || 0,
+      imagen // Guardar el Base64 comprimido
     }
+    
     const { error } = producto
       ? await supabase.from('productos').update(payload).eq('id', producto.id)
       : await supabase.from('productos').insert(payload)
@@ -252,6 +372,86 @@ function ProductoForm({ producto, onClose, onSuccess }: { producto: Producto | n
         <div className="modal-handle" />
         <h2>{producto ? 'Editar Producto' : 'Nuevo Producto'}</h2>
         
+        {/* SUBIDA DE FOTO CON COMPRESIÓN */}
+        <div className="form-group" style={{ background: 'rgba(133,113,122,0.04)', padding: 12, borderRadius: 12 }}>
+          <label style={{ fontSize: 12 }}>Foto del Producto (Compresión Automática)</label>
+          
+          {imagen ? (
+            <div style={{ position: 'relative', width: 90, height: 90, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--gris-perla)', marginTop: 6 }}>
+              <img src={imagen} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <button
+                type="button"
+                onClick={() => setImagen('')}
+                style={{
+                  position: 'absolute',
+                  top: 4,
+                  right: 4,
+                  width: 20,
+                  height: 20,
+                  borderRadius: 10,
+                  background: 'rgba(255,255,255,0.9)',
+                  color: 'var(--color-error)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 10,
+                  padding: 0,
+                  minWidth: 'unset',
+                  minHeight: 'unset',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <div style={{ marginTop: 6 }}>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  minHeight: 42,
+                  border: '1.5px dashed var(--gris-claro)',
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: 'var(--sombra-malva)',
+                  background: 'white',
+                  textTransform: 'none',
+                  letterSpacing: 'normal',
+                  margin: 0
+                }}
+              >
+                <Plus size={16} /> 
+                {compressing ? 'Comprimiendo...' : 'Subir Foto'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    setCompressing(true)
+                    try {
+                      const compressed = await compressImage(file)
+                      setImagen(compressed)
+                    } catch (err) {
+                      console.error(err)
+                      alert('Error al comprimir la imagen')
+                    } finally {
+                      setCompressing(false)
+                    }
+                  }}
+                  style={{ display: 'none' }}
+                  disabled={compressing}
+                />
+              </label>
+            </div>
+          )}
+        </div>
+
         <div className="form-group">
           <label>Categoría</label>
           <select value={categoria} onChange={e => { setCategoria(e.target.value); setTallaColor('') }}>
@@ -350,7 +550,7 @@ function ProductoForm({ producto, onClose, onSuccess }: { producto: Producto | n
         
         <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
           <button className="btn-secondary" onClick={onClose} style={{ flex: 1 }}>Cancelar</button>
-          <button className="btn-primary" onClick={handleSubmit} disabled={loading || !nombre || !tallaColor || !precioVenta} style={{ flex: 1 }}>
+          <button className="btn-primary" onClick={handleSubmit} disabled={loading || compressing || !nombre || !tallaColor || !precioVenta} style={{ flex: 1 }}>
             {loading ? 'Guardando...' : producto ? 'Actualizar' : 'Crear'}
           </button>
         </div>
