@@ -1,0 +1,162 @@
+import { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
+import FloatingActions from '../components/FloatingActions'
+import VentaModal from '../components/VentaModal'
+import AbonoModal from '../components/AbonoModal'
+import type { SaldoPendiente } from '../types'
+
+export default function Dashboard() {
+  const [totalPorCobrar, setTotalPorCobrar] = useState(0)
+  const [prendasStock, setPrendasStock] = useState(0)
+  const [gananciasMes, setGananciasMes] = useState(0)
+  const [showVenta, setShowVenta] = useState(false)
+  const [showAbono, setShowAbono] = useState(false)
+  const [deudoras, setDeudoras] = useState<SaldoPendiente[]>([])
+  const [selectedDeuda, setSelectedDeuda] = useState<SaldoPendiente | null>(null)
+
+  const loadData = async () => {
+    const [stockRes, ventasRes, saldosRes] = await Promise.all([
+      supabase.from('productos').select('stock'),
+      supabase.from('ventas').select('total_venta, fecha_venta, estado'),
+      supabase.from('vista_saldos_pendientes').select('*'),
+    ])
+
+    if (stockRes.data) {
+      setPrendasStock(stockRes.data.reduce((s, p) => s + p.stock, 0))
+    }
+
+    if (ventasRes.data) {
+      const now = new Date()
+      const mesActual = now.getMonth()
+      const anioActual = now.getFullYear()
+      const delMes = ventasRes.data.filter(v => {
+        const d = new Date(v.fecha_venta)
+        return d.getMonth() === mesActual && d.getFullYear() === anioActual
+      })
+      setGananciasMes(delMes.reduce((s, v) => s + Number(v.total_venta), 0))
+    }
+
+    if (saldosRes.data) {
+      setDeudoras(saldosRes.data)
+      setTotalPorCobrar(saldosRes.data.reduce((s, c) => s + Number(c.saldo_pendiente), 0))
+    }
+  }
+
+  useEffect(() => { loadData() }, [])
+
+  return (
+    <div className="page">
+      <div style={{ textAlign: 'center', padding: '20px 0 12px' }}>
+        <img src="/logo.png" alt="Diva Shop" style={{ height: 60, marginBottom: 4 }} />
+        <h1 style={{ fontSize: 20, fontWeight: 800, color: 'var(--rosa-metalico)' }}>Diva Shop</h1>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
+        <div className="stat-card">
+          <div className="stat-label">Total por Cobrar</div>
+          <div className="stat-value" style={{ color: 'var(--rosa-vino)' }}>
+            ${totalPorCobrar.toFixed(2)}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div className="stat-card" style={{ flex: 1 }}>
+            <div className="stat-label">Prendas en Stock</div>
+            <div className="stat-value">{prendasStock}</div>
+          </div>
+          <div className="stat-card" style={{ flex: 1 }}>
+            <div className="stat-label">Ventas del Mes</div>
+            <div className="stat-value">${gananciasMes.toFixed(2)}</div>
+          </div>
+        </div>
+      </div>
+
+      {deudoras.length > 0 && (
+        <div>
+          <div className="table-header">
+            <h2>Deudoras</h2>
+          </div>
+          {deudoras.slice(0, 5).map(d => (
+            <div
+              key={d.cliente_id}
+              className={`list-item customer-debt ${Number(d.saldo_pendiente) > 200 ? 'high' : ''}`}
+              onClick={() => { setSelectedDeuda(d); setShowAbono(true) }}
+            >
+              <div>
+                <div style={{ fontWeight: 600 }}>{d.nombre}</div>
+                <div style={{ fontSize: 13, color: 'var(--sombra-malva)' }}>
+                  Debe ${Number(d.saldo_pendiente).toFixed(2)}
+                </div>
+              </div>
+              <span className="badge badge-danger">
+                ${Number(d.saldo_pendiente).toFixed(2)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <FloatingActions onVenta={() => setShowVenta(true)} onAbono={() => setShowAbono(true)} />
+
+      {showVenta && <VentaModal onClose={() => setShowVenta(false)} onSuccess={loadData} />}
+      {showAbono && selectedDeuda && (
+        <AbonoModal
+          clienteId={selectedDeuda.cliente_id}
+          clienteNombre={selectedDeuda.nombre}
+          onClose={() => { setShowAbono(false); setSelectedDeuda(null) }}
+          onSuccess={loadData}
+        />
+      )}
+      {showAbono && !selectedDeuda && <AbonoListModal onClose={() => setShowAbono(false)} onSuccess={loadData} />}
+    </div>
+  )
+}
+
+function AbonoListModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const [deudoras, setDeudoras] = useState<SaldoPendiente[]>([])
+  const [selected, setSelected] = useState<SaldoPendiente | null>(null)
+
+  useEffect(() => {
+    supabase.from('vista_saldos_pendientes').select('*').then(r => {
+      if (r.data) setDeudoras(r.data)
+    })
+  }, [])
+
+  if (selected) {
+    return (
+      <AbonoModal
+        clienteId={selected.cliente_id}
+        clienteNombre={selected.nombre}
+        onClose={() => setSelected(null)}
+        onSuccess={onSuccess}
+      />
+    )
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()}>
+        <h2>Seleccionar Clienta</h2>
+        {deudoras.map(d => (
+          <div
+            key={d.cliente_id}
+            className={`list-item customer-debt ${Number(d.saldo_pendiente) > 200 ? 'high' : ''}`}
+            onClick={() => setSelected(d)}
+          >
+            <div>
+              <div style={{ fontWeight: 600 }}>{d.nombre}</div>
+              <div style={{ fontSize: 13, color: 'var(--sombra-malva)' }}>
+                Saldo: ${Number(d.saldo_pendiente).toFixed(2)}
+              </div>
+            </div>
+          </div>
+        ))}
+        {deudoras.length === 0 && (
+          <div className="empty-state">No hay deudoras pendientes</div>
+        )}
+        <button className="btn-secondary" onClick={onClose} style={{ width: '100%', marginTop: 16 }}>
+          Cancelar
+        </button>
+      </div>
+    </div>
+  )
+}
