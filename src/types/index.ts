@@ -4,10 +4,21 @@ export interface Producto {
   talla_color: string
   categoria: string
   marca: string
+  proveedor_id?: string
+  proveedor_nombre?: string
   precio_costo: number
   precio_venta: number
   stock: number
   imagen?: string
+  created_at: string
+}
+
+export interface Proveedor {
+  id: string
+  nombre: string
+  nit?: string
+  telefono?: string
+  notas?: string
   created_at: string
 }
 
@@ -43,6 +54,7 @@ export interface Abono {
   id: string
   cliente_id: string
   monto: number
+  destino?: 'tienda' | 'servicio'
   fecha_abono: string
 }
 
@@ -53,6 +65,8 @@ export interface SaldoPendiente {
   total_adeudado: number
   total_abonado: number
   saldo_pendiente: number
+  saldo_pendiente_tienda: number
+  saldo_pendiente_servicio: number
 }
 
 export interface Servicio {
@@ -76,4 +90,3 @@ export interface Cita {
   servicio_nombre?: string
   servicio_categoria?: 'cejas' | 'pestañas' | 'cabello'
 }
-

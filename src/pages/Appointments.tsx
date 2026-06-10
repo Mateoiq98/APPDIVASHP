@@ -10,6 +10,25 @@ const HORAS = [
 
 const CATEGORIAS = ['cejas', 'pestañas', 'cabello'] as const
 
+// Helpers de formateo para Peso Colombiano (COP)
+const formatCOP = (val: number | string) => {
+  if (val === undefined || val === null || val === '') return '$0'
+  const num = typeof val === 'string' ? parseFloat(val) : val
+  return '$' + Math.round(num).toLocaleString('es-CO')
+}
+
+const formatInputCurrency = (val: string | number) => {
+  if (val === undefined || val === null || val === '') return ''
+  const clean = val.toString().replace(/\D/g, '')
+  if (!clean) return ''
+  return Number(clean).toLocaleString('es-CO')
+}
+
+const parseCurrency = (val: string): number => {
+  const clean = val.replace(/\D/g, '')
+  return parseFloat(clean) || 0
+}
+
 export default function Appointments() {
   const [activeTab, setActiveTab] = useState<'historial' | 'agenda' | 'servicios'>('historial')
   const [citas, setCitas] = useState<Cita[]>([])
@@ -259,7 +278,7 @@ export default function Appointments() {
                             <Clock size={12} /> {cita.hora}
                           </span>
                           <span style={{ fontWeight: 700, color: 'var(--negro-elegante)', fontSize: 14 }}>
-                            ${Number(cita.valor).toFixed(2)}
+                            {formatCOP(cita.valor)}
                           </span>
                         </div>
                       </div>
@@ -379,7 +398,7 @@ export default function Appointments() {
                               <div style={{ fontSize: 12, opacity: 0.8 }}>{citaEnHora.servicio_nombre}</div>
                             </div>
                             <div style={{ textAlign: 'right', fontWeight: 700, fontSize: 14 }}>
-                              ${Number(citaEnHora.valor).toFixed(2)}
+                              {formatCOP(citaEnHora.valor)}
                             </div>
                           </div>
                         ) : (
@@ -387,7 +406,6 @@ export default function Appointments() {
                             onClick={() => {
                               setEditandoCita(null)
                               setSelectedDate(selectedDate)
-                              // Rellenar datos
                               setShowCitaForm(true)
                               setTimeout(() => {
                                 const selectHora = document.getElementById('form-hora') as HTMLSelectElement
@@ -590,7 +608,8 @@ function CitaFormSheet({
   const [categoria, setCategoria] = useState<'cejas' | 'pestañas' | 'cabello'>('cejas')
   const [servicioId, setServicioId] = useState(cita?.servicio_id || '')
   
-  const [valor, setValor] = useState(cita?.valor.toString() || '')
+  // Usar formato de COP para inicializar el input
+  const [valor, setValor] = useState(formatInputCurrency(cita?.valor || ''))
   const [estado, setEstado] = useState<'pendiente' | 'realizada' | 'pagada'>(cita?.estado || 'pendiente')
   const [loading, setLoading] = useState(false)
 
@@ -599,7 +618,7 @@ function CitaFormSheet({
   const [nuevoClienteTel, setNuevoClienteTel] = useState('')
 
   useEffect(() => {
-    if (cita && servicesFiltered.length > 0) {
+    if (cita && servicios.length > 0) {
       const s = servicios.find(srv => srv.id === cita.servicio_id)
       if (s) {
         setCategoria(s.categoria)
@@ -646,17 +665,12 @@ function CitaFormSheet({
       fecha,
       hora,
       estado,
-      valor: parseFloat(valor) || 0
+      valor: parseCurrency(valor)
     }
 
-    let error = null
-    if (cita) {
-      const res = await supabase.from('citas').update(payload).eq('id', cita.id)
-      error = res.error
-    } else {
-      const res = await supabase.from('citas').insert(payload)
-      error = res.error
-    }
+    const { error } = cita
+      ? await supabase.from('citas').update(payload).eq('id', cita.id)
+      : await supabase.from('citas').insert(payload)
 
     setLoading(false)
     if (error) {
@@ -782,7 +796,13 @@ function CitaFormSheet({
         <div className="form-row">
           <div className="form-group">
             <label>Valor del servicio ($)</label>
-            <input type="number" value={valor} onChange={e => setValor(e.target.value)} placeholder="Ej: 35000" />
+            <input 
+              type="text" 
+              inputMode="numeric"
+              value={valor} 
+              onChange={e => setValor(formatInputCurrency(e.target.value))} 
+              placeholder="Ej: 35.000" 
+            />
           </div>
           <div className="form-group">
             <label>Estado</label>

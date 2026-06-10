@@ -1,26 +1,41 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Producto } from '../types'
-import { Plus, Search } from 'lucide-react'
+import { FileText, Plus, Search } from 'lucide-react'
+import FacturaOcrModal from '../components/FacturaOcrModal'
 
-const CATEGORIAS = [
+type ProductoWithProveedor = Producto & {
+  proveedores?: { nombre?: string } | null
+}
+
+const DEFAULT_CATEGORIAS = [
+  'Vestidos de Novia',
+  'Vestidos de Fiesta',
   'Prendas superiores',
   'Prendas inferiores',
-  'Vestidos y enterizos',
-  'Ropa interior y lencería',
-  'Ropa deportiva',
-  'Trajes de baño y salidas de baño',
-  'Calzado y Accesorios',
-] as const
+  'Velo y Tocados',
+  'Lencería / Interior',
+  'Accesorios y Bisutería',
+  'Calzado'
+]
 
-const CATEGORIA_LABELS: Record<string, string> = {
-  'Prendas superiores': 'Superiores',
-  'Prendas inferiores': 'Inferiores',
-  'Vestidos y enterizos': 'Vestidos',
-  'Ropa interior y lencería': 'Lencería/Interior',
-  'Ropa deportiva': 'Deportiva',
-  'Trajes de baño y salidas de baño': 'Trajes de Baño',
-  'Calzado y Accesorios': 'Accesorios/Calzado',
+// Helpers de formateo para Peso Colombiano (COP)
+const formatCOP = (val: number | string) => {
+  if (val === undefined || val === null || val === '') return '$0'
+  const num = typeof val === 'string' ? parseFloat(val) : val
+  return '$' + Math.round(num).toLocaleString('es-CO')
+}
+
+const formatInputCurrency = (val: string | number) => {
+  if (val === undefined || val === null || val === '') return ''
+  const clean = val.toString().replace(/\D/g, '')
+  if (!clean) return ''
+  return Number(clean).toLocaleString('es-CO')
+}
+
+const parseCurrency = (val: string): number => {
+  const clean = val.replace(/\D/g, '')
+  return parseFloat(clean) || 0
 }
 
 // Helper para comprimir la imagen del lado del cliente
@@ -55,9 +70,11 @@ const compressImage = (file: File): Promise<string> => {
         const ctx = canvas.getContext('2d')
         ctx?.drawImage(img, 0, 0, width, height)
         
-        // Exportar a JPEG con calidad reducida
         const dataUrl = canvas.toDataURL('image/jpeg', 0.6)
         resolve(dataUrl)
+      }
+      img.onerror = () => {
+        reject(new Error('El archivo no es una imagen válida o está dañado.'))
       }
     }
     reader.onerror = (error) => reject(error)
@@ -70,14 +87,24 @@ export default function Inventory() {
   const [filtroCat, setFiltroCat] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [showOcr, setShowOcr] = useState(false)
   const [editando, setEditando] = useState<Producto | null>(null)
   
   // Estado para previsualizar foto grande
   const [previewImage, setPreviewImage] = useState<string | null>(null)
 
   const load = async () => {
-    const { data } = await supabase.from('productos').select('*').order('nombre')
-    if (data) setProductos(data)
+    const { data, error } = await supabase.from('productos').select('*, proveedores(nombre)').order('nombre')
+    if (!error && data) {
+      setProductos((data as ProductoWithProveedor[]).map(p => ({
+        ...p,
+        proveedor_nombre: p.proveedores?.nombre || ''
+      })))
+      return
+    }
+
+    const fallback = await supabase.from('productos').select('*').order('nombre')
+    if (fallback.data) setProductos(fallback.data)
   }
 
   useEffect(() => { load() }, [])
@@ -91,17 +118,36 @@ export default function Inventory() {
     return true
   }).filter(p => {
     if (!busqueda) return true
-    const q = busqueda.toLowerCase()
-    return p.nombre.toLowerCase().includes(q) || p.talla_color.toLowerCase().includes(q) || (p.marca && p.marca.toLowerCase().includes(q))
+    const keywords = busqueda.toLowerCase().split(/\s+/).filter(Boolean)
+    if (keywords.length === 0) return true
+    
+    return keywords.every(kw => {
+      const matchNombre = p.nombre.toLowerCase().includes(kw)
+      const matchTallaColor = p.talla_color.toLowerCase().includes(kw)
+      const matchMarca = p.marca ? p.marca.toLowerCase().includes(kw) : false
+      const matchCategoria = p.categoria ? p.categoria.toLowerCase().includes(kw) : false
+      return matchNombre || matchTallaColor || matchMarca || matchCategoria
+    })
   })
+
+  // Obtener categorías activas y combinarlas con las default
+  const categoriasList = Array.from(new Set([
+    ...DEFAULT_CATEGORIAS,
+    ...productos.map(p => p.categoria).filter(Boolean)
+  ])).sort()
 
   return (
     <div className="page">
       <div className="page-header">
         <h1>Inventario</h1>
-        <button className="btn-primary" onClick={() => { setEditando(null); setShowForm(true) }} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 6, minHeight: 40 }}>
-          <Plus size={18} /> Nuevo
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn-secondary" onClick={() => setShowOcr(true)} style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 6, minHeight: 40 }}>
+            <FileText size={18} /> OCR
+          </button>
+          <button className="btn-primary" onClick={() => { setEditando(null); setShowForm(true) }} style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 6, minHeight: 40 }}>
+            <Plus size={18} /> Nuevo
+          </button>
+        </div>
       </div>
 
       <div style={{ position: 'relative', marginBottom: 16 }}>
@@ -126,15 +172,16 @@ export default function Inventory() {
         ))}
       </div>
 
+      {/* Categorías Dinámicas */}
       <div className="filter-bar" style={{ marginBottom: 20 }}>
         <button className={`filter-btn ${filtroCat === '' ? 'active' : ''}`} onClick={() => setFiltroCat('')}>Todas</button>
-        {CATEGORIAS.map(c => (
+        {categoriasList.map(c => (
           <button
             key={c}
             className={`filter-btn ${filtroCat === c ? 'active' : ''}`}
             onClick={() => setFiltroCat(c)}
           >
-            {CATEGORIA_LABELS[c] || c}
+            {c}
           </button>
         ))}
       </div>
@@ -164,7 +211,7 @@ export default function Inventory() {
               <div
                 onClick={(e) => {
                   if (p.imagen) {
-                    e.stopPropagation() // Evitar editar producto al ver foto
+                    e.stopPropagation()
                     setPreviewImage(p.imagen)
                   }
                 }}
@@ -206,8 +253,14 @@ export default function Inventory() {
                   <span style={{ fontWeight: 500 }}>{p.talla_color}</span>
                   <span style={{ opacity: 0.4 }}>•</span>
                   <span style={{ fontWeight: 700, color: 'var(--negro-elegante)' }}>
-                    ${p.precio_venta.toFixed(2)}
+                    {formatCOP(p.precio_venta)}
                   </span>
+                  {p.proveedor_nombre && (
+                    <>
+                      <span style={{ opacity: 0.4 }}>•</span>
+                      <span style={{ fontWeight: 600 }}>Prov. {p.proveedor_nombre}</span>
+                    </>
+                  )}
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, borderTop: '1px solid rgba(234, 231, 231, 0.4)', paddingTop: 4 }}>
@@ -215,7 +268,7 @@ export default function Inventory() {
                     {p.categoria}
                   </span>
                   <span style={{ fontSize: 11, color: 'var(--sombra-malva)', opacity: 0.8 }}>
-                    Costo: <strong style={{ fontWeight: 700, color: 'var(--negro-elegante)' }}>${p.precio_costo.toFixed(2)}</strong>
+                    Costo: <strong style={{ fontWeight: 700, color: 'var(--negro-elegante)' }}>{formatCOP(p.precio_costo)}</strong>
                   </span>
                 </div>
               </div>
@@ -236,6 +289,15 @@ export default function Inventory() {
           producto={editando}
           onClose={() => setShowForm(false)}
           onSuccess={() => { setShowForm(false); load() }}
+          categoriasExistentes={categoriasList}
+        />
+      )}
+
+      {showOcr && (
+        <FacturaOcrModal
+          categorias={categoriasList}
+          onClose={() => setShowOcr(false)}
+          onSuccess={() => { setShowOcr(false); load() }}
         />
       )}
 
@@ -291,29 +353,34 @@ function PackageIconLarge() {
   )
 }
 
-const SUBTIPO_SUGERENCIAS: Record<string, string[]> = {
-  'Prendas superiores': ['Blusas', 'Camisas', 'Tops', 'Camisetas', 'Crop tops', 'Bodies', 'Suéteres', 'Chaquetas'],
-  'Prendas inferiores': ['Pantalones', 'Faldas', 'Shorts', 'Bermudas'],
-  'Vestidos y enterizos': ['Vestidos cortos', 'Vestidos largos', 'De gala', 'Casuales', 'Enterizos', 'Monos'],
-  'Ropa interior y lencería': ['Brasieres', 'Panties', 'Bodies moldeadores', 'Pijamas', 'Ropa de descanso'],
-  'Ropa deportiva': ['Leggings', 'Shorts deportivos', 'Tops de alto impacto', 'Chaquetas rompevientos', 'Sudaderas'],
-  'Trajes de baño y salidas de baño': ['Bikinis', 'Enteros', 'Pareos', 'Kimonos', 'Vestidos de playa'],
-  'Calzado y Accesorios': ['Botas', 'Tacones', 'Tenís', 'Sandalias', 'Bolsos', 'Cinturones', 'Bisutería'],
-}
-
-function ProductoForm({ producto, onClose, onSuccess }: { producto: Producto | null; onClose: () => void; onSuccess: () => void }) {
+function ProductoForm({ 
+  producto, 
+  onClose, 
+  onSuccess,
+  categoriasExistentes 
+}: { 
+  producto: Producto | null
+  onClose: () => void
+  onSuccess: () => void
+  categoriasExistentes: string[]
+}) {
   const [nombre, setNombre] = useState(producto?.nombre || '')
   const [tallaColor, setTallaColor] = useState(producto?.talla_color || '')
-  const [categoria, setCategoria] = useState(producto?.categoria || '')
+  
+  // Categoría Dinámica
+  const [categoriaSel, setCategoriaSel] = useState('')
+  const [categoriaNueva, setCategoriaNueva] = useState('')
+  const [usarNuevaCategoria, setUsarNuevaCategoria] = useState(false)
+
   const [marcaSel, setMarcaSel] = useState('')
   const [marcaNueva, setMarcaNueva] = useState('')
   const [marcasLista, setMarcasLista] = useState<{ id: string; nombre: string }[]>([])
   const [usarNueva, setUsarNueva] = useState(false)
-  const [precioCosto, setPrecioCosto] = useState(producto?.precio_costo.toString() || '')
-  const [precioVenta, setPrecioVenta] = useState(producto?.precio_venta.toString() || '')
+  
+  const [precioCosto, setPrecioCosto] = useState(formatInputCurrency(producto?.precio_costo || ''))
+  const [precioVenta, setPrecioVenta] = useState(formatInputCurrency(producto?.precio_venta || ''))
   const [stock, setStock] = useState(producto?.stock.toString() || '0')
   
-  // Estado para la imagen Base64 y carga
   const [imagen, setImagen] = useState(producto?.imagen || '')
   const [compressing, setCompressing] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -332,12 +399,24 @@ function ProductoForm({ producto, onClose, onSuccess }: { producto: Producto | n
         }
       }
     })
-  }, [])
+
+    // Cargar categoría inicial si edita
+    if (producto?.categoria) {
+      if (categoriasExistentes.includes(producto.categoria)) {
+        setCategoriaSel(producto.categoria)
+      } else {
+        setUsarNuevaCategoria(true)
+        setCategoriaNueva(producto.categoria)
+      }
+    }
+  }, [producto, categoriasExistentes])
 
   const getMarca = () => usarNueva ? marcaNueva : marcaSel
+  const getCategoria = () => usarNuevaCategoria ? categoriaNueva : categoriaSel
 
   const handleSubmit = async () => {
-    if (!nombre || !tallaColor || !precioVenta) return
+    const catFinal = getCategoria()
+    if (!nombre || !tallaColor || !precioVenta || !catFinal) return
     setLoading(true)
     const marcaFinal = getMarca()
     if (!marcaFinal) return
@@ -345,18 +424,26 @@ function ProductoForm({ producto, onClose, onSuccess }: { producto: Producto | n
     const payload = {
       nombre,
       talla_color: tallaColor,
-      categoria,
+      categoria: catFinal,
       marca: marcaFinal,
-      precio_costo: parseFloat(precioCosto) || 0,
-      precio_venta: parseFloat(precioVenta),
+      precio_costo: parseCurrency(precioCosto),
+      precio_venta: parseCurrency(precioVenta),
       stock: parseInt(stock) || 0,
-      imagen // Guardar el Base64 comprimido
+      imagen
     }
     
     const { error } = producto
       ? await supabase.from('productos').update(payload).eq('id', producto.id)
       : await supabase.from('productos').insert(payload)
-    if (error) { setLoading(false); alert('Error: ' + error.message); return }
+    if (error) { 
+      setLoading(false)
+      if (error.message.includes('column "imagen"') || error.message.includes('imagen')) {
+        alert('Error: La columna "imagen" no existe en Supabase.\n\nDebes ir a la consola de Supabase (SQL Editor) y ejecutar este comando:\n\nALTER TABLE productos ADD COLUMN imagen text;')
+      } else {
+        alert('Error: ' + error.message)
+      }
+      return 
+    }
 
     if (!marcasLista.find(m => m.nombre === marcaFinal)) {
       await supabase.from('marcas').insert({ nombre: marcaFinal })
@@ -433,13 +520,19 @@ function ProductoForm({ producto, onClose, onSuccess }: { producto: Producto | n
                   onChange={async (e) => {
                     const file = e.target.files?.[0]
                     if (!file) return
+                    
+                    if (!file.type.startsWith('image/')) {
+                      alert('Por favor selecciona un archivo de imagen válido (JPG, PNG).')
+                      return
+                    }
+                    
                     setCompressing(true)
                     try {
                       const compressed = await compressImage(file)
                       setImagen(compressed)
                     } catch (err) {
                       console.error(err)
-                      alert('Error al comprimir la imagen')
+                      alert('Error al procesar la imagen: ' + (err instanceof Error ? err.message : 'Error desconocido'))
                     } finally {
                       setCompressing(false)
                     }
@@ -452,34 +545,47 @@ function ProductoForm({ producto, onClose, onSuccess }: { producto: Producto | n
           )}
         </div>
 
+        {/* Categoría Dinámica */}
         <div className="form-group">
           <label>Categoría</label>
-          <select value={categoria} onChange={e => { setCategoria(e.target.value); setTallaColor('') }}>
-            <option value="">Seleccionar categoría...</option>
-            {CATEGORIAS.map(c => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        </div>
-        
-        {categoria && SUBTIPO_SUGERENCIAS[categoria] && (
-          <div className="form-group">
-            <label>Subcategoría / Tipo</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {SUBTIPO_SUGERENCIAS[categoria].map(s => (
-                <button
-                  key={s}
-                  type="button"
-                  className={`filter-btn ${tallaColor.includes(s) ? 'active' : ''}`}
-                  onClick={() => setTallaColor(prev => prev === s ? '' : s)}
-                  style={{ fontSize: 13, padding: '6px 12px', minHeight: 36 }}
-                >
-                  {s}
-                </button>
-              ))}
+          {!usarNuevaCategoria ? (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <select value={categoriaSel} onChange={e => setCategoriaSel(e.target.value)} style={{ flex: 1 }}>
+                <option value="">Seleccionar categoría...</option>
+                {categoriasExistentes.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setUsarNuevaCategoria(true)}
+                style={{ padding: '0 12px', minWidth: 'unset', fontSize: 13, whiteSpace: 'nowrap' }}
+              >
+                + Nueva
+              </button>
             </div>
-          </div>
-        )}
+          ) : (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                value={categoriaNueva}
+                onChange={e => setCategoriaNueva(e.target.value)}
+                placeholder="Escribir nueva categoría..."
+                style={{ flex: 1 }}
+              />
+              {categoriasExistentes.length > 0 && (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setUsarNuevaCategoria(false)}
+                  style={{ padding: '0 12px', minWidth: 'unset', fontSize: 13, whiteSpace: 'nowrap' }}
+                >
+                  Usar existente
+                </button>
+              )}
+            </div>
+          )}
+        </div>
         
         <div className="form-group">
           <label>Nombre / Descripción</label>
@@ -535,11 +641,23 @@ function ProductoForm({ producto, onClose, onSuccess }: { producto: Producto | n
         <div className="form-row">
           <div className="form-group">
             <label>Precio Costo ($)</label>
-            <input type="number" step="0.01" value={precioCosto} onChange={e => setPrecioCosto(e.target.value)} />
+            <input 
+              type="text" 
+              inputMode="numeric"
+              value={precioCosto} 
+              onChange={e => setPrecioCosto(formatInputCurrency(e.target.value))} 
+              placeholder="0"
+            />
           </div>
           <div className="form-group">
             <label>Precio Venta ($)</label>
-            <input type="number" step="0.01" value={precioVenta} onChange={e => setPrecioVenta(e.target.value)} />
+            <input 
+              type="text" 
+              inputMode="numeric"
+              value={precioVenta} 
+              onChange={e => setPrecioVenta(formatInputCurrency(e.target.value))} 
+              placeholder="0"
+            />
           </div>
         </div>
         

@@ -48,11 +48,21 @@ export default function VentaModal({ onClose, onSuccess }: Props) {
     }
   }
 
-  const CATEGORIAS = [
-    'Prendas superiores', 'Prendas inferiores', 'Vestidos y enterizos',
-    'Ropa interior y lencería', 'Ropa deportiva',
-    'Trajes de baño y salidas de baño', 'Calzado y Accesorios',
-  ] as const
+  const DEFAULT_CATEGORIAS = [
+    'Vestidos de Novia',
+    'Vestidos de Fiesta',
+    'Prendas superiores',
+    'Prendas inferiores',
+    'Velo y Tocados',
+    'Lencería / Interior',
+    'Accesorios y Bisutería',
+    'Calzado'
+  ]
+
+  const categoriasList = Array.from(new Set([
+    ...DEFAULT_CATEGORIAS,
+    ...productos.map(p => p.categoria).filter(Boolean)
+  ])).sort()
 
   useEffect(() => {
     Promise.all([
@@ -213,13 +223,13 @@ export default function VentaModal({ onClose, onSuccess }: Props) {
           <label>Productos</label>
           <div className="filter-bar" style={{ marginBottom: 8 }}>
             <button className={`filter-btn ${filtroCat === '' ? 'active' : ''}`} onClick={() => setFiltroCat('')}>Todos</button>
-            {CATEGORIAS.map(c => (
+            {categoriasList.map(c => (
               <button
                 key={c}
                 className={`filter-btn ${filtroCat === c ? 'active' : ''}`}
                 onClick={() => setFiltroCat(c)}
               >
-                {c.split(' ')[0]}
+                {c}
               </button>
             ))}
           </div>

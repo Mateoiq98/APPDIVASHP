@@ -4,6 +4,13 @@ import type { Venta } from '../types'
 import VentaModal from '../components/VentaModal'
 import { Plus } from 'lucide-react'
 
+// Helper de formateo para Peso Colombiano (COP)
+const formatCOP = (val: number | string) => {
+  if (val === undefined || val === null || val === '') return '$0'
+  const num = typeof val === 'string' ? parseFloat(val) : val
+  return '$' + Math.round(num).toLocaleString('es-CO')
+}
+
 export default function Sales() {
   const [ventas, setVentas] = useState<Venta[]>([])
   const [showModal, setShowModal] = useState(false)
@@ -43,7 +50,7 @@ export default function Sales() {
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontWeight: 700, color: 'var(--rosa-metalico)' }}>
-                ${Number(v.total_venta).toFixed(2)}
+                {formatCOP(v.total_venta)}
               </div>
               <span className={`badge ${v.estado === 'pagado' ? 'badge-success' : 'badge-danger'}`}>
                 {v.estado === 'pagado' ? 'Pagado' : 'Pendiente'}
