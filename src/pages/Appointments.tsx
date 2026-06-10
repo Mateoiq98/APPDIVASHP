@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Cita, Servicio, Cliente } from '../types'
-import { Calendar as CalendarIcon, Clock, Plus, DollarSign, ChevronLeft, ChevronRight, Settings } from 'lucide-react'
+import { Calendar as CalendarIcon, Clock, Plus, ChevronLeft, ChevronRight, Settings } from 'lucide-react'
 
 const HORAS = [
   '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', 
@@ -11,7 +11,7 @@ const HORAS = [
 const CATEGORIAS = ['cejas', 'pestañas', 'cabello'] as const
 
 export default function Appointments() {
-  const [activeTab, setActiveTab] = useState<'historial' | 'agenda' | 'resumen' | 'servicios'>('historial')
+  const [activeTab, setActiveTab] = useState<'historial' | 'agenda' | 'servicios'>('historial')
   const [citas, setCitas] = useState<Cita[]>([])
   const [servicios, setServicios] = useState<Servicio[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
@@ -28,9 +28,6 @@ export default function Appointments() {
 
   // Estados de Filtros de Historial
   const [filtroEstado, setFiltroEstado] = useState<'todos' | 'pendiente' | 'realizada' | 'pagada'>('todos')
-  
-  // Estados de Filtros de Resumen
-  const [resumenPeriodo, setResumenPeriodo] = useState<'hoy' | 'semana' | 'mes'>('mes')
 
   // Modales
   const [showCitaForm, setShowCitaForm] = useState(false)
@@ -140,54 +137,6 @@ export default function Appointments() {
     return c.estado === filtroEstado
   })
 
-  // Cálculos de Resumen
-  const getResumenData = () => {
-    const now = new Date()
-    
-    // Filtrar citas según período
-    const citasFiltradas = citas.filter(c => {
-      const citaDate = new Date(c.fecha + 'T00:00:00')
-      
-      if (resumenPeriodo === 'hoy') {
-        return c.fecha === now.toISOString().split('T')[0]
-      } else if (resumenPeriodo === 'semana') {
-        const diffTime = Math.abs(now.getTime() - citaDate.getTime())
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-        return diffDays <= 7
-      } else {
-        // mes actual
-        return citaDate.getMonth() === now.getMonth() && citaDate.getFullYear() === now.getFullYear()
-      }
-    })
-
-    // Agrupación por categoría
-    const porCategoria = { cejas: 0, pestañas: 0, cabello: 0 }
-    // Agrupación por profesional
-    const porProf = { Sandra: 0, Hasly: 0 }
-    
-    let total = 0
-    let completadas = 0
-
-    citasFiltradas.forEach(c => {
-      // Tomamos citas cobradas (pagada) y realizadas
-      if (c.estado === 'realizada' || c.estado === 'pagada') {
-        total += Number(c.valor)
-        completadas++
-        
-        if (c.servicio_categoria === 'cejas') porCategoria.cejas += Number(c.valor)
-        if (c.servicio_categoria === 'pestañas') porCategoria.pestañas += Number(c.valor)
-        if (c.servicio_categoria === 'cabello') porCategoria.cabello += Number(c.valor)
-        
-        if (c.profesional === 'Sandra') porProf.Sandra += Number(c.valor)
-        if (c.profesional === 'Hasly') porProf.Hasly += Number(c.valor)
-      }
-    })
-
-    return { porCategoria, porProf, total, completadas }
-  }
-
-  const resumen = getResumenData()
-
   if (missingTables) {
     return (
       <div className="page" style={{ paddingBottom: 100 }}>
@@ -244,13 +193,6 @@ export default function Appointments() {
           style={{ flex: 1 }}
         >
           Agenda (Día)
-        </button>
-        <button 
-          className={`filter-btn ${activeTab === 'resumen' ? 'active' : ''}`}
-          onClick={() => setActiveTab('resumen')}
-          style={{ flex: 1 }}
-        >
-          Resumen
         </button>
         <button 
           className={`filter-btn ${activeTab === 'servicios' ? 'active' : ''}`}
@@ -327,7 +269,7 @@ export default function Appointments() {
 
                 {citasHistorial.length === 0 && (
                   <div className="empty-state">
-                    <CalendarIcon />
+                    <CalendarIcon size={48} style={{ opacity: 0.5, marginBottom: 12 }} />
                     <p>No se encontraron citas en el historial</p>
                   </div>
                 )}
@@ -448,7 +390,6 @@ export default function Appointments() {
                               // Rellenar datos
                               setShowCitaForm(true)
                               setTimeout(() => {
-                                // Forzar hora
                                 const selectHora = document.getElementById('form-hora') as HTMLSelectElement
                                 if (selectHora) selectHora.value = hora
                               }, 50)
@@ -477,85 +418,7 @@ export default function Appointments() {
             </div>
           )}
 
-          {/* VISTA 3: RESUMEN FINANCIERO */}
-          {activeTab === 'resumen' && (
-            <div>
-              {/* Filtros Período */}
-              <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-                {(['hoy', 'semana', 'mes'] as const).map(p => (
-                  <button
-                    key={p}
-                    className={`filter-btn ${resumenPeriodo === p ? 'active' : ''}`}
-                    onClick={() => setResumenPeriodo(p)}
-                    style={{ flex: 1, textTransform: 'capitalize' }}
-                  >
-                    {p === 'hoy' ? 'Hoy' : p === 'semana' ? 'Semana' : 'Mes'}
-                  </button>
-                ))}
-              </div>
-
-              {/* Tarjeta General */}
-              <div className="card" style={{ padding: 24, textAlign: 'center', marginBottom: 16 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--sombra-malva)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  Ingreso Generado ({resumenPeriodo === 'hoy' ? 'Hoy' : resumenPeriodo === 'semana' ? 'Últimos 7 días' : 'Mes Actual'})
-                </span>
-                <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--color-exito)', marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <DollarSign size={28} /> {resumen.total.toFixed(2)}
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--sombra-malva)', marginTop: 6 }}>
-                  {resumen.completadas} citas completadas / pagadas
-                </div>
-              </div>
-
-              {/* Categorías */}
-              <div className="card" style={{ padding: 20, marginBottom: 16 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>Por Categorías</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {CATEGORIAS.map(cat => {
-                    const valor = resumen.porCategoria[cat]
-                    const porcentaje = resumen.total > 0 ? (valor / resumen.total) * 100 : 0
-                    
-                    return (
-                      <div key={cat} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-                          <span style={{ fontWeight: 700, textTransform: 'capitalize' }}>{cat}</span>
-                          <span style={{ fontWeight: 700 }}>${valor.toFixed(2)}</span>
-                        </div>
-                        <div style={{ width: '100%', height: 8, background: 'var(--gris-perla)', borderRadius: 4, overflow: 'hidden' }}>
-                          <div 
-                            style={{ 
-                              width: `${porcentaje}%`, 
-                              height: '100%', 
-                              background: cat === 'cejas' ? '#B66C70' : cat === 'pestañas' ? '#D58D8A' : '#95545B',
-                              borderRadius: 4,
-                              transition: 'width 0.3s ease'
-                            }} 
-                          />
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Profesionales */}
-              <div className="card" style={{ padding: 20 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>Por Profesional</h3>
-                <div style={{ display: 'flex', gap: 12 }}>
-                  {Object.entries(resumen.porProf).map(([prof, valor]) => (
-                    <div key={prof} style={{ flex: 1, background: 'var(--gris-fondo)', padding: 14, borderRadius: 12, textAlign: 'center', border: '1px solid var(--gris-perla)' }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--sombra-malva)' }}>{prof}</span>
-                      <div style={{ fontSize: 18, fontWeight: 800, marginTop: 4, color: 'var(--negro-elegante)' }}>
-                        ${valor.toFixed(2)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* VISTA 4: SERVICIOS (GESTIÓN DE SERVICIOS) */}
+          {/* VISTA 3: SERVICIOS (GESTIÓN DE SERVICIOS) */}
           {activeTab === 'servicios' && (
             <div>
               {/* Formulario de Nuevo Servicio */}
@@ -731,12 +594,10 @@ function CitaFormSheet({
   const [estado, setEstado] = useState<'pendiente' | 'realizada' | 'pagada'>(cita?.estado || 'pendiente')
   const [loading, setLoading] = useState(false)
 
-  // Sub-formulario para agregar clienta rápida
   const [creandoCliente, setCreandoCliente] = useState(false)
   const [nuevoClienteNombre, setNuevoClienteNombre] = useState('')
   const [nuevoClienteTel, setNuevoClienteTel] = useState('')
 
-  // Al editar, fijar la categoría correcta del servicio ya seleccionado
   useEffect(() => {
     if (cita && servicesFiltered.length > 0) {
       const s = servicios.find(srv => srv.id === cita.servicio_id)
@@ -746,7 +607,6 @@ function CitaFormSheet({
     }
   }, [cita, servicios])
 
-  // Filtrar servicios por categoría seleccionada
   const servicesFiltered = servicios.filter(s => s.categoria === categoria)
 
   const handleCreateCliente = async () => {
@@ -763,14 +623,11 @@ function CitaFormSheet({
       return
     }
     if (data && data[0]) {
-      // Agregar clienta nueva cargada a la lista
       setClienteId(data[0].id)
       setCreandoCliente(false)
       setNuevoClienteNombre('')
       setNuevoClienteTel('')
-      // Recargar lista llamando a un callback indirecto o simplemente asumiendo que se actualizará
       alert('Clienta agregada con éxito')
-      // Forzar recarga rápida de la UI de citas
       onSuccess()
     }
   }
