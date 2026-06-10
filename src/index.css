@@ -216,13 +216,14 @@ input:focus, select:focus {
   background: none;
   color: var(--sombra-malva);
   opacity: 0.65;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   min-width: unset;
   min-height: unset;
-  padding: 6px 12px;
-  border-radius: 12px;
+  padding: 6px 2px;
+  border-radius: 10px;
   transition: all 0.2s ease;
+  flex: 1;
 }
 
 .nav-btn.active {
@@ -232,8 +233,8 @@ input:focus, select:focus {
 }
 
 .nav-btn svg {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
 }
 
 .fab {

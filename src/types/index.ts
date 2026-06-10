@@ -53,3 +53,26 @@ export interface SaldoPendiente {
   total_abonado: number
   saldo_pendiente: number
 }
+
+export interface Servicio {
+  id: string
+  nombre: string
+  categoria: 'cejas' | 'pestañas' | 'cabello'
+  created_at?: string
+}
+
+export interface Cita {
+  id: string
+  profesional: 'Sandra' | 'Hasly'
+  cliente_id: string
+  servicio_id: string
+  fecha: string // YYYY-MM-DD
+  hora: string // HH:MM
+  estado: 'pendiente' | 'realizada' | 'pagada'
+  valor: number
+  created_at?: string
+  cliente_nombre?: string
+  servicio_nombre?: string
+  servicio_categoria?: 'cejas' | 'pestañas' | 'cabello'
+}
+

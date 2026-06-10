@@ -1,13 +1,15 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { LayoutGrid, Package, ShoppingCart, Users, BarChart3 } from 'lucide-react'
+import { LayoutGrid, Calendar, Package, ShoppingCart, Users, BarChart3 } from 'lucide-react'
 
 const NAV_ITEMS = [
   { path: '/', label: 'Inicio', icon: LayoutGrid },
+  { path: '/citas', label: 'Citas', icon: Calendar },
   { path: '/inventario', label: 'Inventario', icon: Package },
   { path: '/ventas', label: 'Ventas', icon: ShoppingCart },
   { path: '/clientas', label: 'Clientas', icon: Users },
   { path: '/reportes', label: 'Reportes', icon: BarChart3 },
 ]
+
 
 export default function Layout() {
   const navigate = useNavigate()
