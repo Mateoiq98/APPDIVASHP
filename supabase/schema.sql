@@ -7,9 +7,18 @@ CREATE TABLE productos (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   nombre text NOT NULL,
   talla_color text NOT NULL,
+  categoria text NOT NULL DEFAULT '',
+  marca text NOT NULL DEFAULT '',
   precio_costo numeric(10,2) NOT NULL DEFAULT 0,
   precio_venta numeric(10,2) NOT NULL DEFAULT 0,
   stock integer NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- 1B. MARCAS (registro único para reutilizar)
+CREATE TABLE marcas (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre text NOT NULL UNIQUE,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 

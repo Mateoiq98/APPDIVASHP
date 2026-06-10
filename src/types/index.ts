@@ -2,6 +2,8 @@ export interface Producto {
   id: string
   nombre: string
   talla_color: string
+  categoria: string
+  marca: string
   precio_costo: number
   precio_venta: number
   stock: number

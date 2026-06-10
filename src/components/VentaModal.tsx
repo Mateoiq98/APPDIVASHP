@@ -20,6 +20,13 @@ export default function VentaModal({ onClose, onSuccess }: Props) {
   const [metodoPago, setMetodoPago] = useState<'efectivo' | 'transferencia' | 'credito'>('efectivo')
   const [items, setItems] = useState<ItemSeleccionado[]>([])
   const [loading, setLoading] = useState(false)
+  const [filtroCat, setFiltroCat] = useState('')
+
+  const CATEGORIAS = [
+    'Prendas superiores', 'Prendas inferiores', 'Vestidos y enterizos',
+    'Ropa interior y lencería', 'Ropa deportiva',
+    'Trajes de baño y salidas de baño', 'Calzado y Accesorios',
+  ] as const
 
   useEffect(() => {
     Promise.all([
@@ -102,6 +109,11 @@ export default function VentaModal({ onClose, onSuccess }: Props) {
     onClose()
   }
 
+  const productosFiltrados = productos.filter(p => p.stock > 0).filter(p => {
+    if (!filtroCat) return true
+    return p.categoria === filtroCat
+  })
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -135,12 +147,27 @@ export default function VentaModal({ onClose, onSuccess }: Props) {
 
         <div className="form-group">
           <label>Productos</label>
+          <div className="filter-bar" style={{ marginBottom: 8 }}>
+            <button className={`filter-btn ${filtroCat === '' ? 'active' : ''}`} onClick={() => setFiltroCat('')}>Todos</button>
+            {CATEGORIAS.map(c => (
+              <button
+                key={c}
+                className={`filter-btn ${filtroCat === c ? 'active' : ''}`}
+                onClick={() => setFiltroCat(c)}
+              >
+                {c.split(' ')[0]}
+              </button>
+            ))}
+          </div>
           <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 8 }}>
-            {productos.filter(p => p.stock > 0).map(p => (
+            {productosFiltrados.map(p => (
               <div key={p.id} className="product-select-item">
                 <div className="info">
                   <div className="name">{p.nombre}</div>
-                  <div className="detail">{p.talla_color} · ${p.precio_venta.toFixed(2)} · Stock: {p.stock}</div>
+                  <div className="detail">
+                    {p.marca && <span style={{ fontWeight: 500 }}>{p.marca} · </span>}
+                    {p.talla_color} · ${p.precio_venta.toFixed(2)} · Stock: {p.stock}
+                  </div>
                 </div>
                 <button onClick={() => addProducto(p)} style={{ background: 'var(--rosa-claro)', color: 'var(--negro-elegante)' }}>
                   <Plus size={18} />

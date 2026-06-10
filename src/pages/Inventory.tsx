@@ -3,9 +3,20 @@ import { supabase } from '../lib/supabase'
 import type { Producto } from '../types'
 import { Plus, Search } from 'lucide-react'
 
+const CATEGORIAS = [
+  'Prendas superiores',
+  'Prendas inferiores',
+  'Vestidos y enterizos',
+  'Ropa interior y lencería',
+  'Ropa deportiva',
+  'Trajes de baño y salidas de baño',
+  'Calzado y Accesorios',
+] as const
+
 export default function Inventory() {
   const [productos, setProductos] = useState<Producto[]>([])
-  const [filtro, setFiltro] = useState<'todos' | 'disponibles' | 'agotados'>('todos')
+  const [filtroStock, setFiltroStock] = useState<'todos' | 'disponibles' | 'agotados'>('todos')
+  const [filtroCat, setFiltroCat] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editando, setEditando] = useState<Producto | null>(null)
@@ -18,13 +29,16 @@ export default function Inventory() {
   useEffect(() => { load() }, [])
 
   const filtrados = productos.filter(p => {
-    if (filtro === 'disponibles') return p.stock > 0
-    if (filtro === 'agotados') return p.stock === 0
+    if (filtroStock === 'disponibles') return p.stock > 0
+    if (filtroStock === 'agotados') return p.stock === 0
+    return true
+  }).filter(p => {
+    if (filtroCat && p.categoria !== filtroCat) return false
     return true
   }).filter(p => {
     if (!busqueda) return true
     const q = busqueda.toLowerCase()
-    return p.nombre.toLowerCase().includes(q) || p.talla_color.toLowerCase().includes(q)
+    return p.nombre.toLowerCase().includes(q) || p.talla_color.toLowerCase().includes(q) || p.marca.toLowerCase().includes(q)
   })
 
   return (
@@ -50,10 +64,23 @@ export default function Inventory() {
         {(['todos', 'disponibles', 'agotados'] as const).map(f => (
           <button
             key={f}
-            className={`filter-btn ${filtro === f ? 'active' : ''}`}
-            onClick={() => setFiltro(f)}
+            className={`filter-btn ${filtroStock === f ? 'active' : ''}`}
+            onClick={() => setFiltroStock(f)}
           >
             {f === 'todos' ? 'Todos' : f === 'disponibles' ? 'Disponibles' : 'Agotados'}
+          </button>
+        ))}
+      </div>
+
+      <div className="filter-bar" style={{ marginBottom: 16 }}>
+        <button className={`filter-btn ${filtroCat === '' ? 'active' : ''}`} onClick={() => setFiltroCat('')}>Todas</button>
+        {CATEGORIAS.map(c => (
+          <button
+            key={c}
+            className={`filter-btn ${filtroCat === c ? 'active' : ''}`}
+            onClick={() => setFiltroCat(c)}
+          >
+            {c.split(' ')[0]}
           </button>
         ))}
       </div>
@@ -65,13 +92,17 @@ export default function Inventory() {
             className="list-item"
             onClick={() => { setEditando(p); setShowForm(true) }}
           >
-            <div>
+            <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600 }}>{p.nombre}</div>
               <div style={{ fontSize: 13, color: 'var(--sombra-malva)' }}>
+                {p.marca && <span style={{ fontWeight: 500 }}>{p.marca} · </span>}
                 {p.talla_color} · ${p.precio_venta.toFixed(2)}
               </div>
+              <div style={{ fontSize: 11, color: 'var(--gris-claro)', marginTop: 2 }}>
+                {p.categoria}
+              </div>
             </div>
-            <div style={{ textAlign: 'right' }}>
+            <div style={{ textAlign: 'right', marginLeft: 8 }}>
               <div style={{ fontWeight: 700, color: p.stock > 0 ? 'var(--rosa-metalico)' : 'var(--rosa-vino)' }}>
                 {p.stock} uds
               </div>
@@ -109,20 +140,58 @@ function PackageIcon() {
   )
 }
 
+const SUBTIPO_SUGERENCIAS: Record<string, string[]> = {
+  'Prendas superiores': ['Blusas', 'Camisas', 'Tops', 'Camisetas', 'Crop tops', 'Bodies', 'Suéteres', 'Chaquetas'],
+  'Prendas inferiores': ['Pantalones', 'Faldas', 'Shorts', 'Bermudas'],
+  'Vestidos y enterizos': ['Vestidos cortos', 'Vestidos largos', 'De gala', 'Casuales', 'Enterizos', 'Monos'],
+  'Ropa interior y lencería': ['Brasieres', 'Panties', 'Bodies moldeadores', 'Pijamas', 'Ropa de descanso'],
+  'Ropa deportiva': ['Leggings', 'Shorts deportivos', 'Tops de alto impacto', 'Chaquetas rompevientos', 'Sudaderas'],
+  'Trajes de baño y salidas de baño': ['Bikinis', 'Enteros', 'Pareos', 'Kimonos', 'Vestidos de playa'],
+  'Calzado y Accesorios': ['Botas', 'Tacones', 'Tenís', 'Sandalias', 'Bolsos', 'Cinturones', 'Bisutería'],
+}
+
 function ProductoForm({ producto, onClose, onSuccess }: { producto: Producto | null; onClose: () => void; onSuccess: () => void }) {
   const [nombre, setNombre] = useState(producto?.nombre || '')
   const [tallaColor, setTallaColor] = useState(producto?.talla_color || '')
+  const [categoria, setCategoria] = useState(producto?.categoria || '')
+  const [marcaSel, setMarcaSel] = useState('')
+  const [marcaNueva, setMarcaNueva] = useState('')
+  const [marcasLista, setMarcasLista] = useState<{ id: string; nombre: string }[]>([])
+  const [usarNueva, setUsarNueva] = useState(false)
   const [precioCosto, setPrecioCosto] = useState(producto?.precio_costo.toString() || '')
   const [precioVenta, setPrecioVenta] = useState(producto?.precio_venta.toString() || '')
   const [stock, setStock] = useState(producto?.stock.toString() || '0')
   const [loading, setLoading] = useState(false)
 
+  useEffect(() => {
+    supabase.from('marcas').select('*').order('nombre').then(r => {
+      if (!r.data) return
+      setMarcasLista(r.data)
+      if (producto?.marca) {
+        const existe = r.data.find(m => m.nombre === producto.marca)
+        if (existe) {
+          setMarcaSel(producto.marca)
+        } else {
+          setUsarNueva(true)
+          setMarcaNueva(producto.marca)
+        }
+      }
+    })
+  }, [])
+
+  const getMarca = () => usarNueva ? marcaNueva : marcaSel
+
   const handleSubmit = async () => {
     if (!nombre || !tallaColor || !precioVenta) return
     setLoading(true)
+    const marcaFinal = getMarca()
+    if (!marcaFinal) return
+
     const payload = {
       nombre,
       talla_color: tallaColor,
+      categoria,
+      marca: marcaFinal,
       precio_costo: parseFloat(precioCosto) || 0,
       precio_venta: parseFloat(precioVenta),
       stock: parseInt(stock) || 0,
@@ -130,8 +199,13 @@ function ProductoForm({ producto, onClose, onSuccess }: { producto: Producto | n
     const { error } = producto
       ? await supabase.from('productos').update(payload).eq('id', producto.id)
       : await supabase.from('productos').insert(payload)
+    if (error) { setLoading(false); alert('Error: ' + error.message); return }
+
+    if (!marcasLista.find(m => m.nombre === marcaFinal)) {
+      await supabase.from('marcas').insert({ nombre: marcaFinal })
+    }
+
     setLoading(false)
-    if (error) { alert('Error: ' + error.message); return }
     onSuccess()
   }
 
@@ -140,8 +214,75 @@ function ProductoForm({ producto, onClose, onSuccess }: { producto: Producto | n
       <div className="modal-content" onClick={e => e.stopPropagation()}>
         <h2>{producto ? 'Editar Producto' : 'Nuevo Producto'}</h2>
         <div className="form-group">
+          <label>Categoría</label>
+          <select value={categoria} onChange={e => { setCategoria(e.target.value); setTallaColor('') }}>
+            <option value="">Seleccionar categoría...</option>
+            {CATEGORIAS.map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+        {categoria && SUBTIPO_SUGERENCIAS[categoria] && (
+          <div className="form-group">
+            <label>Subcategoría / Tipo</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {SUBTIPO_SUGERENCIAS[categoria].map(s => (
+                <button
+                  key={s}
+                  type="button"
+                  className={`filter-btn ${tallaColor.includes(s) ? 'active' : ''}`}
+                  onClick={() => setTallaColor(prev => prev === s ? '' : s)}
+                  style={{ fontSize: 13, padding: '6px 12px', minHeight: 36 }}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="form-group">
           <label>Nombre / Descripción</label>
           <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej: Jean Azul" />
+        </div>
+        <div className="form-group">
+          <label>Marca</label>
+          {!usarNueva ? (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <select value={marcaSel} onChange={e => setMarcaSel(e.target.value)} style={{ flex: 1 }}>
+                <option value="">Seleccionar marca...</option>
+                {marcasLista.map(m => (
+                  <option key={m.id} value={m.nombre}>{m.nombre}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setUsarNueva(true)}
+                style={{ padding: '0 12px', minWidth: 'unset', fontSize: 13, whiteSpace: 'nowrap' }}
+              >
+                + Nueva
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                value={marcaNueva}
+                onChange={e => setMarcaNueva(e.target.value)}
+                placeholder="Escribir nueva marca..."
+                style={{ flex: 1 }}
+              />
+              {marcasLista.length > 0 && (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setUsarNueva(false)}
+                  style={{ padding: '0 12px', minWidth: 'unset', fontSize: 13, whiteSpace: 'nowrap' }}
+                >
+                  Usar existente
+                </button>
+              )}
+            </div>
+          )}
         </div>
         <div className="form-group">
           <label>Talla / Color</label>
