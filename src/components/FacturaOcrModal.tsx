@@ -1,8 +1,30 @@
-import { useEffect, useMemo, useState } from 'react'
-import { FileText, Plus, Save, ScanLine, Trash2, X } from 'lucide-react'
+import { useEffect, useMemo, useState, type ClipboardEvent, type DragEvent } from 'react'
+import { Camera, Clipboard, Plus, Save, ScanLine, Settings, Trash2, Upload, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { analizarFacturaConOpenRouter, DEFAULT_OPENROUTER_OCR_MODEL } from '../lib/openrouterOcr'
 import type { Proveedor } from '../types'
+
+const MAX_FACTURA_IMAGES = 4
+
+const MODEL_PRESETS = [
+  { label: 'Preciso', value: 'google/gemini-3.1-flash-lite' },
+  { label: 'Mas preciso', value: 'google/gemini-3.5-flash' },
+  { label: 'Gratis', value: 'google/gemma-4-31b-it:free' },
+  { label: 'Gratis NVIDIA', value: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free' }
+]
+
+const LEGACY_DEFAULT_MODEL = 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free'
+const MODEL_MIGRATION_KEY = 'divashop_ocr_model_migrated_v2'
+
+const getInitialOcrModel = () => {
+  const saved = localStorage.getItem('openrouter_model')
+  if (!saved) return DEFAULT_OPENROUTER_OCR_MODEL
+  if (saved === LEGACY_DEFAULT_MODEL && !localStorage.getItem(MODEL_MIGRATION_KEY)) {
+    localStorage.setItem(MODEL_MIGRATION_KEY, 'true')
+    return DEFAULT_OPENROUTER_OCR_MODEL
+  }
+  return saved
+}
 
 type DraftItem = {
   id: string
@@ -12,6 +34,7 @@ type DraftItem = {
   talla_color: string
   cantidad: string
   precio_costo: string
+  precio_total: string
   precio_venta: string
 }
 
@@ -23,6 +46,7 @@ const emptyItem = (): DraftItem => ({
   talla_color: '',
   cantidad: '1',
   precio_costo: '',
+  precio_total: '',
   precio_venta: ''
 })
 
@@ -82,8 +106,9 @@ export default function FacturaOcrModal({
   const [proveedorNombre, setProveedorNombre] = useState('')
   const [proveedorNit, setProveedorNit] = useState('')
   const [usarProveedorNuevo, setUsarProveedorNuevo] = useState(false)
-  const [model, setModel] = useState(() => localStorage.getItem('openrouter_model') || DEFAULT_OPENROUTER_OCR_MODEL)
+  const [model, setModel] = useState(getInitialOcrModel)
   const [imageDataUrls, setImageDataUrls] = useState<string[]>([])
+  const [dragActive, setDragActive] = useState(false)
   const [items, setItems] = useState<DraftItem[]>([])
   const [loadingOcr, setLoadingOcr] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -103,6 +128,41 @@ export default function FacturaOcrModal({
 
   const updateItem = (id: string, patch: Partial<DraftItem>) => {
     setItems(prev => prev.map(item => item.id === id ? { ...item, ...patch } : item))
+  }
+
+  const addImageFiles = async (files: File[]) => {
+    const imageFiles = files.filter(file => file.type.startsWith('image/'))
+    if (imageFiles.length === 0) {
+      setError('No encontre imagenes para cargar.')
+      return
+    }
+
+    const remainingSlots = Math.max(0, MAX_FACTURA_IMAGES - imageDataUrls.length)
+    if (remainingSlots === 0) {
+      setError(`Solo puedes cargar hasta ${MAX_FACTURA_IMAGES} fotos por factura.`)
+      return
+    }
+
+    setError('')
+    try {
+      const urls = await Promise.all(imageFiles.slice(0, remainingSlots).map(fileToImageDataUrl))
+      setImageDataUrls(prev => [...prev, ...urls].slice(0, MAX_FACTURA_IMAGES))
+    } catch (err) {
+      setError(getErrorMessage(err, 'No se pudieron cargar las imagenes.'))
+    }
+  }
+
+  const handlePasteImages = async (event: ClipboardEvent<HTMLDivElement>) => {
+    const files = Array.from(event.clipboardData.files)
+    if (files.length === 0) return
+    event.preventDefault()
+    await addImageFiles(files)
+  }
+
+  const handleDropImages = async (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    setDragActive(false)
+    await addImageFiles(Array.from(event.dataTransfer.files))
   }
 
   const handleAnalyze = async () => {
@@ -141,6 +201,7 @@ export default function FacturaOcrModal({
         talla_color: producto.talla_color || '',
         cantidad: String(producto.cantidad || 1),
         precio_costo: formatCurrency(producto.precio_costo || 0),
+        precio_total: formatCurrency(producto.precio_total || 0),
         precio_venta: formatCurrency(producto.precio_venta || 0)
       })))
     } catch (err) {
@@ -185,7 +246,7 @@ export default function FacturaOcrModal({
         categoria: item.categoria.trim(),
         marca: item.marca.trim() || 'Sin marca',
         proveedor_id: finalProveedorId,
-        precio_costo: parseCurrency(item.precio_costo),
+        precio_costo: parseCurrency(item.precio_costo) || Math.round(parseCurrency(item.precio_total) / Math.max(1, parseInt(item.cantidad, 10) || 1)),
         precio_venta: parseCurrency(item.precio_venta),
         stock: Math.max(1, parseInt(item.cantidad, 10) || 1)
       }))
@@ -218,9 +279,25 @@ export default function FacturaOcrModal({
           </button>
         </div>
 
-        <div className="form-group">
-          <label>Modelo OpenRouter</label>
-          <input value={model} onChange={event => setModel(event.target.value)} />
+        <div className="form-group" style={{ background: 'rgba(133,113,122,0.04)', padding: 12, borderRadius: 12 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Settings size={14} /> Configuracion OCR
+          </label>
+          <div className="form-row">
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <select value={model} onChange={event => setModel(event.target.value)}>
+                {MODEL_PRESETS.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+                {!MODEL_PRESETS.some(option => option.value === model) && (
+                  <option value={model}>Personalizado</option>
+                )}
+              </select>
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <input value={model} onChange={event => setModel(event.target.value)} placeholder="Modelo OpenRouter" />
+            </div>
+          </div>
         </div>
 
         <div className="form-group">
@@ -252,31 +329,63 @@ export default function FacturaOcrModal({
           )}
         </div>
 
-        <div className="form-group" style={{ background: 'rgba(133,113,122,0.04)', padding: 12, borderRadius: 12 }}>
-          <label>Fotos de factura (max. 2)</label>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <label className="btn-secondary" style={{ minHeight: 42, margin: 0, textTransform: 'none', letterSpacing: 0, cursor: 'pointer' }}>
-              <FileText size={17} /> Agregar foto
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={async event => {
-                  const remainingSlots = Math.max(0, 2 - imageDataUrls.length)
-                  const files = Array.from(event.target.files || []).slice(0, remainingSlots)
-                  if (files.length === 0) return
-                  const urls = await Promise.all(files.map(fileToImageDataUrl))
-                  setImageDataUrls(prev => [...prev, ...urls].slice(0, 2))
-                  event.currentTarget.value = ''
-                }}
-                style={{ display: 'none' }}
-                disabled={imageDataUrls.length >= 2}
-              />
-            </label>
-            <button className="btn-primary" onClick={handleAnalyze} disabled={loadingOcr || imageDataUrls.length === 0}>
-              <ScanLine size={17} /> {loadingOcr ? 'Leyendo...' : 'Leer OCR'}
-            </button>
-            {imageDataUrls.length > 0 && <span className="badge badge-success">{imageDataUrls.length}/2 fotos</span>}
+        <div className="form-group">
+          <label>Fotos de factura</label>
+          <div
+            tabIndex={0}
+            onPaste={handlePasteImages}
+            onDrop={handleDropImages}
+            onDragOver={event => {
+              event.preventDefault()
+              setDragActive(true)
+            }}
+            onDragLeave={() => setDragActive(false)}
+            style={{
+              border: `1.5px dashed ${dragActive ? 'var(--rosa-metalico)' : 'var(--gris-claro)'}`,
+              borderRadius: 12,
+              padding: 14,
+              background: dragActive ? 'rgba(213,141,138,0.08)' : 'rgba(133,113,122,0.04)',
+              outline: 'none'
+            }}
+          >
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <label className="btn-secondary" style={{ minHeight: 42, margin: 0, textTransform: 'none', letterSpacing: 0, cursor: imageDataUrls.length >= MAX_FACTURA_IMAGES ? 'not-allowed' : 'pointer', opacity: imageDataUrls.length >= MAX_FACTURA_IMAGES ? 0.55 : 1 }}>
+                <Camera size={17} /> Foto
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  multiple
+                  onChange={async event => {
+                    await addImageFiles(Array.from(event.target.files || []))
+                    event.currentTarget.value = ''
+                  }}
+                  style={{ display: 'none' }}
+                  disabled={imageDataUrls.length >= MAX_FACTURA_IMAGES}
+                />
+              </label>
+              <label className="btn-secondary" style={{ minHeight: 42, margin: 0, textTransform: 'none', letterSpacing: 0, cursor: imageDataUrls.length >= MAX_FACTURA_IMAGES ? 'not-allowed' : 'pointer', opacity: imageDataUrls.length >= MAX_FACTURA_IMAGES ? 0.55 : 1 }}>
+                <Upload size={17} /> Archivo
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={async event => {
+                    await addImageFiles(Array.from(event.target.files || []))
+                    event.currentTarget.value = ''
+                  }}
+                  style={{ display: 'none' }}
+                  disabled={imageDataUrls.length >= MAX_FACTURA_IMAGES}
+                />
+              </label>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--sombra-malva)', fontSize: 12, fontWeight: 700 }}>
+                <Clipboard size={15} /> Pegar o arrastrar
+              </span>
+              <button className="btn-primary" onClick={handleAnalyze} disabled={loadingOcr || imageDataUrls.length === 0}>
+                <ScanLine size={17} /> {loadingOcr ? 'Leyendo...' : 'Leer OCR'}
+              </button>
+              {imageDataUrls.length > 0 && <span className="badge badge-success">{imageDataUrls.length}/{MAX_FACTURA_IMAGES} fotos</span>}
+            </div>
           </div>
           {imageDataUrls.length > 0 && (
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
@@ -305,10 +414,10 @@ export default function FacturaOcrModal({
         )}
 
         <div style={{ overflowX: 'auto', border: '1px solid var(--gris-perla)', borderRadius: 12 }}>
-          <table style={{ width: '100%', minWidth: 900, borderCollapse: 'collapse', background: 'white' }}>
+          <table style={{ width: '100%', minWidth: 1040, borderCollapse: 'collapse', background: 'white' }}>
             <thead>
               <tr style={{ background: 'var(--gris-fondo)' }}>
-                {['Producto', 'Categoria', 'Marca', 'Talla / Color', 'Cant.', 'Costo', 'Venta', ''].map(label => (
+                {['Producto', 'Categoria', 'Marca', 'Talla / Color', 'Cant.', 'Costo unit.', 'Total compra', 'Venta', ''].map(label => (
                   <th key={label} style={{ textAlign: 'left', padding: 10, fontSize: 12, color: 'var(--sombra-malva)', textTransform: 'uppercase' }}>{label}</th>
                 ))}
               </tr>
@@ -333,6 +442,9 @@ export default function FacturaOcrModal({
                   </td>
                   <td style={{ padding: 8, minWidth: 120 }}>
                     <input inputMode="numeric" value={item.precio_costo} onChange={event => updateItem(item.id, { precio_costo: formatCurrency(event.target.value) })} />
+                  </td>
+                  <td style={{ padding: 8, minWidth: 120 }}>
+                    <input inputMode="numeric" value={item.precio_total} onChange={event => updateItem(item.id, { precio_total: formatCurrency(event.target.value) })} />
                   </td>
                   <td style={{ padding: 8, minWidth: 120 }}>
                     <input inputMode="numeric" value={item.precio_venta} onChange={event => updateItem(item.id, { precio_venta: formatCurrency(event.target.value) })} />

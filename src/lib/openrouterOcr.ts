@@ -1,7 +1,7 @@
 import { getAuthToken } from './appAuth'
 
 export const DEFAULT_OPENROUTER_OCR_MODEL =
-  import.meta.env.VITE_OPENROUTER_MODEL || 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free'
+  import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemini-3.1-flash-lite'
 
 export interface OcrProducto {
   nombre: string
@@ -10,6 +10,7 @@ export interface OcrProducto {
   talla_color: string
   cantidad: number
   precio_costo: number
+  precio_total?: number
   precio_venta: number
 }
 

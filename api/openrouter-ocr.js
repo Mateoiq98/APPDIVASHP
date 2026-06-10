@@ -1,6 +1,7 @@
 import { verifySession } from '../server/auth.js'
 
-const DEFAULT_MODEL = 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free'
+const DEFAULT_MODEL = 'google/gemini-3.1-flash-lite'
+const MAX_IMAGES = 4
 
 export const config = {
   maxDuration: 60
@@ -27,6 +28,97 @@ const parseBody = (req) => {
   if (!req.body) return {}
   if (typeof req.body === 'string') return JSON.parse(req.body)
   return req.body
+}
+
+const toNumber = (value) => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value !== 'string') return 0
+  const normalized = value.replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')
+  return Number(normalized) || 0
+}
+
+const isNonProductLine = (name) => {
+  const normalized = String(name || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+  return /^(iva|impuesto|subtotal|total|descuento|rete|retencion|flete|envio|domicilio|saldo|abono|cambio|pago|forma de pago)\b/.test(normalized)
+}
+
+const normalizeOcrResult = (raw) => {
+  const productos = Array.isArray(raw.productos) ? raw.productos : []
+  return {
+    proveedor: {
+      nombre: String(raw.proveedor?.nombre || '').trim(),
+      nit: String(raw.proveedor?.nit || '').trim(),
+      telefono: String(raw.proveedor?.telefono || '').trim()
+    },
+    productos: productos
+      .map((item) => {
+        const cantidad = Math.max(1, Math.round(toNumber(item.cantidad) || 1))
+        const precioTotal = toNumber(item.precio_total ?? item.total_linea ?? item.total ?? item.valor_total)
+        const precioCostoRaw = toNumber(item.precio_costo ?? item.precio_unitario ?? item.valor_unitario)
+        const precioCosto = precioCostoRaw > 0 ? precioCostoRaw : precioTotal > 0 ? precioTotal / cantidad : 0
+        return {
+          nombre: String(item.nombre || item.descripcion || item.producto || '').trim(),
+          categoria: String(item.categoria || '').trim(),
+          marca: String(item.marca || '').trim(),
+          talla_color: String(item.talla_color || item.talla || item.color || '').trim(),
+          cantidad,
+          precio_costo: Math.round(precioCosto),
+          precio_total: Math.round(precioTotal || precioCosto * cantidad),
+          precio_venta: Math.round(toNumber(item.precio_venta))
+        }
+      })
+      .filter((item) => item.nombre && !isNonProductLine(item.nombre))
+  }
+}
+
+const buildResponseFormat = (model) => {
+  if (model.includes(':free') || model.includes('nemotron')) return undefined
+  return {
+    type: 'json_schema',
+    json_schema: {
+      name: 'factura_ocr',
+      strict: true,
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['proveedor', 'productos'],
+        properties: {
+          proveedor: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['nombre', 'nit', 'telefono'],
+            properties: {
+              nombre: { type: 'string' },
+              nit: { type: 'string' },
+              telefono: { type: 'string' }
+            }
+          },
+          productos: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['nombre', 'categoria', 'marca', 'talla_color', 'cantidad', 'precio_costo', 'precio_total', 'precio_venta'],
+              properties: {
+                nombre: { type: 'string' },
+                categoria: { type: 'string' },
+                marca: { type: 'string' },
+                talla_color: { type: 'string' },
+                cantidad: { type: 'number' },
+                precio_costo: { type: 'number' },
+                precio_total: { type: 'number' },
+                precio_venta: { type: 'number' }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 export default async function handler(req, res) {
@@ -61,8 +153,8 @@ export default async function handler(req, res) {
     ? body.model.trim()
     : process.env.OPENROUTER_MODEL || DEFAULT_MODEL
 
-  if (imageDataUrls.length === 0 || imageDataUrls.length > 2) {
-    return sendJson(res, 400, { error: 'Sube entre 1 y 2 imagenes de la factura.' })
+  if (imageDataUrls.length === 0 || imageDataUrls.length > MAX_IMAGES) {
+    return sendJson(res, 400, { error: `Sube entre 1 y ${MAX_IMAGES} imagenes de la factura.` })
   }
 
   if (imageDataUrls.some((url) => typeof url !== 'string' || !url.startsWith('data:image/'))) {
@@ -70,31 +162,38 @@ export default async function handler(req, res) {
   }
 
   try {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': req.headers.origin || 'https://divashop.vercel.app',
-        'X-Title': 'Diva Shop Facturas OCR'
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.1,
-        max_tokens: 4000,
-        messages: [
-          {
-            role: 'system',
-            content: 'Eres un OCR experto para facturas de ropa. Lee una o varias imagenes de la misma factura y devuelve solo JSON valido, sin markdown.'
-          },
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: `Extrae proveedor y productos comprados desde todas las imagenes. Si son dos fotos, tratalas como partes de la misma factura y no dupliques lineas. Si el texto dice jean, jeans, vaquero o pantalon denim, usa categoria "Prendas inferiores". Si no hay talla/color, infiere lo visible o deja vacio. Usa categorias existentes cuando aplique: ${categorias.join(', ')}.
+    const requestBody = {
+      model,
+      temperature: 0,
+      max_tokens: 6000,
+      messages: [
+        {
+          role: 'system',
+          content: 'Eres un OCR experto para facturas de ropa e inventario. Debes leer tablas, listas y recibos aunque tengan columnas desalineadas. Devuelve solo JSON valido, sin markdown.'
+        },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: `Extrae proveedor y TODOS los productos comprados desde TODAS las imagenes.
 
-Devuelve este formato exacto:
+Reglas criticas:
+- Si son varias fotos, tratalas como partes de la misma factura y no dupliques lineas.
+- Extrae cada renglon de producto por separado. No agrupes productos similares.
+- No incluyas subtotal, total, IVA, retenciones, descuentos, fletes, medios de pago ni saldos como productos.
+- Si una linea tiene codigo/referencia y descripcion, pon ambos en "nombre" de forma legible.
+- "cantidad" debe ser la cantidad comprada. Si no aparece, usa 1.
+- "precio_costo" debe ser el precio unitario de compra.
+- "precio_total" debe ser el total de la linea. Si solo aparece total y cantidad, calcula precio_costo = precio_total / cantidad.
+- "precio_venta" solo si la factura lo muestra como precio de venta; si no aparece, usa 0.
+- Si ves jean, jeans, denim, vaquero o pantalon, usa categoria "Prendas inferiores".
+- Si ves blusa, camisa, camiseta, top, body o chaqueta, usa categoria "Prendas superiores".
+- Si ves vestido o enterizo, usa la categoria mas cercana.
+- Si no hay talla/color, deja "talla_color" vacio.
+- Usa categorias existentes cuando aplique: ${categorias.join(', ')}.
+
+Devuelve este JSON exacto:
 {
   "proveedor": { "nombre": "", "nit": "", "telefono": "" },
   "productos": [
@@ -105,24 +204,47 @@ Devuelve este formato exacto:
       "talla_color": "",
       "cantidad": 1,
       "precio_costo": 0,
+      "precio_total": 0,
       "precio_venta": 0
     }
   ]
-}
+}`
+            },
+            ...imageDataUrls.map((url) => ({
+              type: 'image_url',
+              image_url: { url }
+            }))
+          ]
+        }
+      ]
+    }
+    const responseFormat = buildResponseFormat(model)
+    if (responseFormat) requestBody.response_format = responseFormat
 
-precio_costo debe ser el valor unitario de compra, no el total de la linea. precio_venta puede ser 0 si no aparece en la factura.`
-              },
-              ...imageDataUrls.map((url) => ({
-                type: 'image_url',
-                image_url: { url }
-              }))
-            ]
-          }
-        ]
-      })
+    const openRouterHeaders = {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': req.headers.origin || 'https://divashop.vercel.app',
+      'X-Title': 'Diva Shop Facturas OCR'
+    }
+
+    let response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: openRouterHeaders,
+      body: JSON.stringify(requestBody)
     })
 
-    const responseText = await response.text()
+    let responseText = await response.text()
+    if (!response.ok && requestBody.response_format && /response_format|schema|structured/i.test(responseText)) {
+      delete requestBody.response_format
+      response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: openRouterHeaders,
+        body: JSON.stringify(requestBody)
+      })
+      responseText = await response.text()
+    }
+
     if (!response.ok) {
       return sendJson(res, response.status, {
         error: `OpenRouter respondio ${response.status}.`,
@@ -136,7 +258,7 @@ precio_costo debe ser el valor unitario de compra, no el total de la linea. prec
       return sendJson(res, 502, { error: 'OpenRouter no devolvio texto para interpretar.' })
     }
 
-    const parsed = JSON.parse(cleanJsonText(content))
+    const parsed = normalizeOcrResult(JSON.parse(cleanJsonText(content)))
     if (!Array.isArray(parsed.productos)) {
       return sendJson(res, 502, { error: 'La respuesta no contiene una lista de productos.' })
     }
