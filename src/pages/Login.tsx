@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Eye, EyeOff, Lock, Mail } from 'lucide-react'
+import { Eye, EyeOff, Heart, Lock, Mail, Sparkles } from 'lucide-react'
 import { isAllowedLoginEmail, loginWithPassword, normalizeLoginEmail } from '../lib/appAuth'
 import type { AuthUser } from '../lib/AuthContext'
 
@@ -40,6 +40,23 @@ export default function Login({ onLogin }: { onLogin: (user: AuthUser) => void }
 
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18, background: 'var(--gris-fondo)' }}>
+      <style>{`
+        @keyframes loginCelebrate {
+          0% { transform: translateY(10px) rotate(0deg); opacity: 0; }
+          20% { opacity: 1; }
+          100% { transform: translateY(-82px) rotate(145deg); opacity: 0; }
+        }
+
+        @keyframes loginPhotoGlow {
+          0%, 100% { box-shadow: 0 8px 18px rgba(149, 84, 91, 0.18); }
+          50% { box-shadow: 0 10px 28px rgba(182, 108, 112, 0.32); }
+        }
+
+        @keyframes loginBadgePulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.04); }
+        }
+      `}</style>
       <div className="card" style={{ width: '100%', maxWidth: 420, padding: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
           <img src="/logo.png" alt="Diva Shop" style={{ width: 52, height: 52, borderRadius: 12, objectFit: 'cover' }} />
@@ -48,6 +65,50 @@ export default function Login({ onLogin }: { onLogin: (user: AuthUser) => void }
             <p style={{ color: 'var(--sombra-malva)', fontSize: 13, fontWeight: 700, marginTop: 2 }}>
               Acceso privado
             </p>
+          </div>
+        </div>
+
+        <div style={{ position: 'relative', overflow: 'hidden', marginBottom: 22, border: '1px solid rgba(245, 183, 179, 0.7)', borderRadius: 18, padding: 12, background: 'linear-gradient(135deg, rgba(255,255,255,0.96), rgba(253,244,244,0.94))' }}>
+          {[0, 1, 2, 3, 4, 5].map(index => (
+            <span
+              key={index}
+              style={{
+                position: 'absolute',
+                left: `${14 + index * 14}%`,
+                bottom: -12,
+                width: index % 2 === 0 ? 7 : 5,
+                height: index % 2 === 0 ? 14 : 10,
+                borderRadius: 3,
+                background: index % 3 === 0 ? 'var(--rosa-metalico)' : index % 3 === 1 ? 'var(--rosa-claro)' : 'var(--color-exito)',
+                opacity: 0,
+                animation: `loginCelebrate ${2.8 + index * 0.18}s ease-in-out ${index * 0.22}s infinite`
+              }}
+            />
+          ))}
+
+          <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: 12, alignItems: 'center' }}>
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <img
+                src="/anniversary-login.jpeg"
+                alt="Hasly y Teo"
+                style={{ width: 82, height: 92, borderRadius: 18, objectFit: 'cover', border: '3px solid white', animation: 'loginPhotoGlow 3s ease-in-out infinite' }}
+              />
+              <div style={{ position: 'absolute', right: -6, bottom: -6, width: 32, height: 32, borderRadius: 16, background: 'var(--rosa-metalico)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '3px solid white', animation: 'loginBadgePulse 2.4s ease-in-out infinite' }}>
+                <Heart size={15} fill="currentColor" />
+              </div>
+            </div>
+
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--rosa-vino)', fontSize: 11, fontWeight: 800, marginBottom: 5 }}>
+                <Sparkles size={13} /> 5 años celebrando amor
+              </div>
+              <p style={{ margin: 0, color: 'var(--negro-elegante)', fontSize: 13, lineHeight: '18px', fontWeight: 800 }}>
+                Una app hecha con amor para Hasly, para estos 5 años y para todo lo bonito que seguimos construyendo.
+              </p>
+              <p style={{ margin: '5px 0 0', color: 'var(--sombra-malva)', fontSize: 11, lineHeight: '16px', fontWeight: 600 }}>
+                Que cada detalle guarde un pedacito de nuestra historia.
+              </p>
+            </div>
           </div>
         </div>
 
