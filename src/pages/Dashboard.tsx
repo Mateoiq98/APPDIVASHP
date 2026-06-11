@@ -6,6 +6,8 @@ import AbonoModal from '../components/AbonoModal'
 import type { SaldoPendiente } from '../types'
 import { Coins, Package, TrendingUp, MessageCircle } from 'lucide-react'
 import { useBackButtonClose } from '../lib/useBackButtonClose'
+import { useAuth } from '../lib/AuthContext'
+import { getLoginProfile } from '../lib/appAuth'
 
 // Helper de formateo para Peso Colombiano (COP)
 const formatCOP = (val: number | string) => {
@@ -15,6 +17,10 @@ const formatCOP = (val: number | string) => {
 }
 
 export default function Dashboard() {
+  const { user } = useAuth()
+  const profile = getLoginProfile(user.email)
+  const currentHour = new Date().getHours()
+  const greeting = currentHour < 12 ? 'Buenos dias' : currentHour < 18 ? 'Buenas tardes' : 'Buenas noches'
   const [totalPorCobrar, setTotalPorCobrar] = useState(0)
   const [prendasStock, setPrendasStock] = useState(0)
   const [gananciasMes, setGananciasMes] = useState(0)
@@ -68,10 +74,20 @@ export default function Dashboard() {
 
       {/* Saludo y Fecha Dinámica */}
       <div style={{ marginBottom: 20, textAlign: 'left', padding: '0 4px' }}>
-        <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--negro-elegante)' }}>
-          ¡Hola! ✨
-        </h2>
-        <p style={{ fontSize: 13, color: 'var(--sombra-malva)', fontWeight: 500, marginTop: 2, textTransform: 'capitalize' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ minWidth: 0 }}>
+            <h2 style={{ fontSize: 19, fontWeight: 800, color: 'var(--negro-elegante)', lineHeight: '24px' }}>
+              {greeting}, {profile.name}
+            </h2>
+            <p style={{ fontSize: 12, color: 'var(--rosa-metalico)', fontWeight: 800, marginTop: 2 }}>
+              {profile.message}
+            </p>
+          </div>
+          <span className="badge badge-success" style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
+            {profile.label}
+          </span>
+        </div>
+        <p style={{ fontSize: 13, color: 'var(--sombra-malva)', fontWeight: 500, marginTop: 4, textTransform: 'capitalize' }}>
           {new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
       </div>
