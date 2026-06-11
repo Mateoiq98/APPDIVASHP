@@ -59,8 +59,8 @@ export default function Login({ onLogin }: { onLogin: (user: AuthUser) => void }
       `}</style>
       <div className="card" style={{ width: '100%', maxWidth: 420, padding: 24 }}>
         <div style={{ textAlign: 'center', marginBottom: 22 }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: 74, padding: '8px 18px', borderRadius: 18, background: 'linear-gradient(135deg, rgba(255,255,255,0.96), rgba(245,183,179,0.12))', border: '1px solid rgba(245,183,179,0.45)' }}>
-            <img src="/logo-diva-shop-wordmark-compact.png" alt="Diva Shop" style={{ width: 230, maxWidth: '100%', height: 'auto', objectFit: 'contain', filter: 'drop-shadow(0 5px 10px rgba(149, 84, 91, 0.14))' }} />
+          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '100%', maxWidth: 276, padding: 8, borderRadius: 22, background: 'linear-gradient(135deg, rgba(255,255,255,0.98), rgba(245,183,179,0.18))', border: '1px solid rgba(245,183,179,0.5)', boxShadow: '0 10px 26px rgba(149,84,91,0.11)' }}>
+            <img src="/logo.png" alt="Diva Shop" style={{ width: '100%', height: 'auto', borderRadius: 16, objectFit: 'contain', display: 'block' }} />
           </div>
           <p style={{ color: 'var(--sombra-malva)', fontSize: 13, fontWeight: 800, marginTop: 8 }}>
             Acceso privado

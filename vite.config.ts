@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['logo.png', 'logo-diva-shop-wordmark.png', 'logo-diva-shop-wordmark-compact.png', 'anniversary-login.jpeg'],
+      includeAssets: ['logo.png', 'favicon.png', 'apple-touch-icon.png', 'pwa-192.png', 'pwa-512.png', 'anniversary-login.jpeg'],
       manifest: {
         name: 'Diva Shop',
         short_name: 'DivaShop',
@@ -19,14 +19,16 @@ export default defineConfig({
         start_url: '/',
         icons: [
           {
-            src: 'logo.png',
+            src: 'pwa-192.png',
             sizes: '192x192',
             type: 'image/png',
+            purpose: 'any maskable',
           },
           {
-            src: 'logo.png',
+            src: 'pwa-512.png',
             sizes: '512x512',
             type: 'image/png',
+            purpose: 'any maskable',
           },
         ],
       },

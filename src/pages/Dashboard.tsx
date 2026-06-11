@@ -68,7 +68,9 @@ export default function Dashboard() {
   return (
     <div className="page">
       <div style={{ textAlign: 'center', padding: '20px 0 12px' }}>
-        <img src="/logo-diva-shop-wordmark-compact.png" alt="Diva Shop" style={{ width: 220, maxWidth: '76%', height: 'auto', objectFit: 'contain', filter: 'drop-shadow(0 5px 10px rgba(149, 84, 91, 0.13))' }} />
+        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 184, maxWidth: '68%', padding: 6, borderRadius: 18, background: 'rgba(255,255,255,0.72)', border: '1px solid rgba(245,183,179,0.36)', boxShadow: '0 8px 22px rgba(133,113,122,0.08)' }}>
+          <img src="/logo.png" alt="Diva Shop" style={{ width: '100%', height: 'auto', borderRadius: 14, objectFit: 'contain', display: 'block' }} />
+        </div>
       </div>
 
       {/* Saludo y Fecha Dinámica */}
