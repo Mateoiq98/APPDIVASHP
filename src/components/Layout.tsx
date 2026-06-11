@@ -226,7 +226,7 @@ export default function Layout() {
             <button
               key={item.path}
               className={`nav-btn ${isActive ? 'active' : ''}`}
-              onClick={() => navigate(item.path)}
+              onClick={() => navigate(item.path, { replace: true })}
             >
               <Icon />
               <span>{item.label}</span>

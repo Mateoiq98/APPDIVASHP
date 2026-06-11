@@ -83,6 +83,24 @@ input:focus, select:focus {
   box-shadow: 0 0 0 4px rgba(213, 141, 138, 0.15);
 }
 
+input[type="date"] {
+  color-scheme: light;
+  font-weight: 700;
+  padding-right: 12px;
+  background:
+    linear-gradient(white, white) padding-box,
+    linear-gradient(135deg, rgba(245, 183, 179, 0.5), rgba(182, 108, 112, 0.25)) border-box;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  width: 20px;
+  height: 20px;
+  padding: 6px;
+  border-radius: 10px;
+  background-color: rgba(245, 183, 179, 0.22);
+  cursor: pointer;
+}
+
 .card {
   background: white;
   border-radius: var(--radio-tarjeta);

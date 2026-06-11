@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import type { Producto } from '../types'
 import { FileText, Plus, Search } from 'lucide-react'
 import FacturaOcrModal from '../components/FacturaOcrModal'
+import { useBackButtonClose } from '../lib/useBackButtonClose'
 
 type ProductoWithProveedor = Producto & {
   proveedores?: { nombre?: string } | null
@@ -92,6 +93,13 @@ export default function Inventory() {
   
   // Estado para previsualizar foto grande
   const [previewImage, setPreviewImage] = useState<string | null>(null)
+
+  useBackButtonClose(showForm, () => {
+    setShowForm(false)
+    setEditando(null)
+  }, 'producto-form')
+  useBackButtonClose(showOcr, () => setShowOcr(false), 'factura-ocr')
+  useBackButtonClose(Boolean(previewImage), () => setPreviewImage(null), 'producto-preview')
 
   const load = async () => {
     const { data, error } = await supabase.from('productos').select('*, proveedores(nombre)').order('nombre')

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Cita, Servicio, Cliente } from '../types'
-import { Calendar as CalendarIcon, Clock, Plus, ChevronLeft, ChevronRight, Settings } from 'lucide-react'
+import { Calendar as CalendarIcon, Clock, Plus, ChevronLeft, ChevronRight, Settings, UserRound } from 'lucide-react'
+import { useBackButtonClose } from '../lib/useBackButtonClose'
 
 const HORAS = [
   '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', 
@@ -29,6 +30,8 @@ const parseCurrency = (val: string): number => {
   return parseFloat(clean) || 0
 }
 
+const formatDateKey = (date: Date) => date.toLocaleDateString('en-CA')
+
 export default function Appointments() {
   const [activeTab, setActiveTab] = useState<'historial' | 'agenda' | 'servicios'>('historial')
   const [citas, setCitas] = useState<Cita[]>([])
@@ -51,6 +54,12 @@ export default function Appointments() {
   // Modales
   const [showCitaForm, setShowCitaForm] = useState(false)
   const [editandoCita, setEditandoCita] = useState<Cita | null>(null)
+  const [defaultHora, setDefaultHora] = useState<(typeof HORAS)[number]>('09:00')
+
+  useBackButtonClose(showCitaForm, () => {
+    setShowCitaForm(false)
+    setEditandoCita(null)
+  }, 'cita-form')
 
   const loadData = async () => {
     setLoading(true)
@@ -145,10 +154,12 @@ export default function Appointments() {
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ]
 
-  const formattedSelectedDateStr = selectedDate.toISOString().split('T')[0]
+  const formattedSelectedDateStr = formatDateKey(selectedDate)
 
   // Citas de la agenda para el día y profesional seleccionado
   const appointmentsForSelectedDate = citas.filter(c => c.fecha === formattedSelectedDateStr && c.profesional === selectedProf)
+  const selectedDateLabel = selectedDate.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })
+  const getAppointmentsForDay = (day: Date) => citas.filter(c => c.fecha === formatDateKey(day) && c.profesional === selectedProf)
 
   // Filtrado de historial
   const citasHistorial = citas.filter(c => {
@@ -190,7 +201,7 @@ export default function Appointments() {
         <h1>Agenda de Citas</h1>
         <button 
           className="btn-primary" 
-          onClick={() => { setEditandoCita(null); setShowCitaForm(true) }}
+          onClick={() => { setEditandoCita(null); setDefaultHora('09:00'); setShowCitaForm(true) }}
           style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 6, minHeight: 40 }}
         >
           <Plus size={18} /> Nueva Cita
@@ -300,62 +311,89 @@ export default function Appointments() {
           {activeTab === 'agenda' && (
             <div>
               {/* Selector de profesional */}
-              <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-                {(['Sandra', 'Hasly'] as const).map(prof => (
-                  <button
-                    key={prof}
-                    className={`btn-secondary ${selectedProf === prof ? 'btn-primary' : ''}`}
-                    onClick={() => setSelectedProf(prof)}
-                    style={{ flex: 1, height: 40 }}
-                  >
-                    Agenda {prof}
-                  </button>
-                ))}
+              <div className="card" style={{ padding: 12, marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: 'var(--sombra-malva)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0 }}>
+                      Agenda del dia
+                    </div>
+                    <div style={{ fontSize: 17, fontWeight: 800, textTransform: 'capitalize', color: 'var(--negro-elegante)' }}>
+                      {selectedDateLabel}
+                    </div>
+                  </div>
+                  <span className={`badge ${appointmentsForSelectedDate.length > 0 ? 'badge-warning' : 'badge-success'}`}>
+                    {appointmentsForSelectedDate.length} citas
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {(['Sandra', 'Hasly'] as const).map(prof => (
+                    <button
+                      key={prof}
+                      className={selectedProf === prof ? 'btn-primary' : 'btn-secondary'}
+                      onClick={() => setSelectedProf(prof)}
+                      style={{ height: 42 }}
+                    >
+                      <UserRound size={16} /> {prof}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Calendario */}
-              <div className="card" style={{ padding: 12, marginBottom: 16 }}>
+              <div className="card" style={{ padding: 14, marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <button onClick={() => navigateMonth('prev')} style={{ background: 'none', minWidth: 32, minHeight: 32 }}>
+                  <button onClick={() => navigateMonth('prev')} className="btn-secondary" style={{ width: 36, height: 36, minWidth: 36, minHeight: 36, padding: 0 }}>
                     <ChevronLeft size={20} />
                   </button>
                   <span style={{ fontWeight: 700, fontSize: 16 }}>
                     {monthNames[currentMonth]} {currentYear}
                   </span>
-                  <button onClick={() => navigateMonth('next')} style={{ background: 'none', minWidth: 32, minHeight: 32 }}>
+                  <button onClick={() => navigateMonth('next')} className="btn-secondary" style={{ width: 36, height: 36, minWidth: 36, minHeight: 36, padding: 0 }}>
                     <ChevronRight size={20} />
                   </button>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, textAlign: 'center', fontSize: 12, fontWeight: 700, color: 'var(--sombra-malva)', marginBottom: 4 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, textAlign: 'center', fontSize: 11, fontWeight: 800, color: 'var(--sombra-malva)', marginBottom: 6, textTransform: 'uppercase' }}>
                   <span>Do</span><span>Lu</span><span>Ma</span><span>Mi</span><span>Ju</span><span>Vi</span><span>Sá</span>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
                   {getDaysInMonth(currentYear, currentMonth).map((day, idx) => {
                     if (!day) return <div key={`empty-${idx}`} />
                     const isSelected = selectedDate.getDate() === day.getDate() && selectedDate.getMonth() === day.getMonth() && selectedDate.getFullYear() === day.getFullYear()
+                    const isToday = formatDateKey(day) === formatDateKey(new Date())
+                    const dayAppointments = getAppointmentsForDay(day)
                     
                     return (
                       <button
                         key={day.toISOString()}
                         onClick={() => setSelectedDate(day)}
                         style={{
-                          minWidth: 32,
-                          minHeight: 32,
-                          height: 32,
-                          borderRadius: '50%',
+                          minWidth: 38,
+                          minHeight: 42,
+                          height: 42,
+                          borderRadius: 12,
                           fontSize: 13,
-                          fontWeight: isSelected ? 700 : 500,
-                          background: isSelected ? 'var(--rosa-metalico)' : 'transparent',
-                          color: isSelected ? 'white' : 'var(--negro-elegante)',
+                          fontWeight: isSelected ? 800 : 700,
+                          background: isSelected ? 'var(--rosa-metalico)' : isToday ? 'var(--fondo-alerta)' : 'white',
+                          color: isSelected ? 'white' : isToday ? 'var(--color-alerta)' : 'var(--negro-elegante)',
+                          border: dayAppointments.length > 0 && !isSelected ? '1.5px solid var(--rosa-claro)' : '1px solid var(--gris-perla)',
                           padding: 0,
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
+                          flexDirection: 'column',
+                          gap: 2,
+                          boxShadow: isSelected ? '0 4px 10px rgba(182,108,112,0.22)' : 'none',
                         }}
                       >
-                        {day.getDate()}
+                        <span>{day.getDate()}</span>
+                        <span style={{
+                          width: dayAppointments.length > 0 ? 16 : 4,
+                          height: 4,
+                          borderRadius: 4,
+                          background: dayAppointments.length > 0 ? (isSelected ? 'white' : 'var(--rosa-metalico)') : 'transparent'
+                        }} />
                       </button>
                     )
                   })}
@@ -365,7 +403,7 @@ export default function Appointments() {
               {/* Agenda por Horas */}
               <div className="card" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ borderBottom: '1px solid var(--gris-perla)', paddingBottom: 6, marginBottom: 6, fontSize: 13, fontWeight: 700, color: 'var(--sombra-malva)' }}>
-                  Bloques para el {selectedDate.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}
+                  Bloques para {selectedDateLabel}
                 </div>
 
                 {HORAS.map(hora => {
@@ -405,12 +443,8 @@ export default function Appointments() {
                           <button
                             onClick={() => {
                               setEditandoCita(null)
-                              setSelectedDate(selectedDate)
+                              setDefaultHora(hora)
                               setShowCitaForm(true)
-                              setTimeout(() => {
-                                const selectHora = document.getElementById('form-hora') as HTMLSelectElement
-                                if (selectHora) selectHora.value = hora
-                              }, 50)
                             }}
                             style={{
                               width: '100%',
@@ -509,6 +543,7 @@ export default function Appointments() {
         <CitaFormSheet
           cita={editandoCita}
           defaultDate={selectedDate}
+          defaultHora={defaultHora}
           clientes={clientes}
           servicios={servicios}
           onClose={() => setShowCitaForm(false)}
@@ -588,6 +623,7 @@ function ServicioFormForm({ onSuccess }: { onSuccess: () => void }) {
 function CitaFormSheet({ 
   cita, 
   defaultDate, 
+  defaultHora,
   clientes, 
   servicios, 
   onClose, 
@@ -595,14 +631,15 @@ function CitaFormSheet({
 }: { 
   cita: Cita | null
   defaultDate: Date
+  defaultHora: (typeof HORAS)[number]
   clientes: Cliente[]
   servicios: Servicio[]
   onClose: () => void
   onSuccess: () => void
 }) {
   const [profesional, setProfesional] = useState<'Sandra' | 'Hasly'>(cita?.profesional || 'Sandra')
-  const [fecha, setFecha] = useState(cita?.fecha || defaultDate.toISOString().split('T')[0])
-  const [hora, setHora] = useState(cita?.hora || '09:00')
+  const [fecha, setFecha] = useState(cita?.fecha || formatDateKey(defaultDate))
+  const [hora, setHora] = useState(cita?.hora || defaultHora)
   const [clienteId, setClienteId] = useState(cita?.cliente_id || '')
   
   const [categoria, setCategoria] = useState<'cejas' | 'pestañas' | 'cabello'>('cejas')

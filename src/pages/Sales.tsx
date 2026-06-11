@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import type { Venta } from '../types'
 import VentaModal from '../components/VentaModal'
 import { Plus } from 'lucide-react'
+import { useBackButtonClose } from '../lib/useBackButtonClose'
 
 // Helper de formateo para Peso Colombiano (COP)
 const formatCOP = (val: number | string) => {
@@ -14,6 +15,8 @@ const formatCOP = (val: number | string) => {
 export default function Sales() {
   const [ventas, setVentas] = useState<Venta[]>([])
   const [showModal, setShowModal] = useState(false)
+
+  useBackButtonClose(showModal, () => setShowModal(false), 'venta-form')
 
   const load = async () => {
     const { data } = await supabase

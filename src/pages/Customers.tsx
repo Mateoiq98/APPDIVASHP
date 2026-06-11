@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import type { Cliente, SaldoPendiente } from '../types'
 import AbonoModal from '../components/AbonoModal'
 import { Plus, Phone, Search } from 'lucide-react'
+import { useBackButtonClose } from '../lib/useBackButtonClose'
 
 // Helper de formateo para Peso Colombiano (COP)
 const formatCOP = (val: number | string) => {
@@ -29,6 +30,13 @@ export default function Customers() {
   const [showBatchAssistant, setShowBatchAssistant] = useState(false)
   const [loading, setLoading] = useState(false)
   const [contactsApiSupported, setContactsApiSupported] = useState(false)
+
+  useBackButtonClose(showForm, () => setShowForm(false), 'cliente-form')
+  useBackButtonClose(showAbono, () => {
+    setShowAbono(false)
+    setSelectedCliente(null)
+  }, 'cliente-abono')
+  useBackButtonClose(showBatchAssistant, () => setShowBatchAssistant(false), 'recordatorios-lote')
 
   useEffect(() => {
     setContactsApiSupported('contacts' in navigator && 'ContactsManager' in window)

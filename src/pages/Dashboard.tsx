@@ -5,6 +5,7 @@ import VentaModal from '../components/VentaModal'
 import AbonoModal from '../components/AbonoModal'
 import type { SaldoPendiente } from '../types'
 import { Coins, Package, TrendingUp, MessageCircle } from 'lucide-react'
+import { useBackButtonClose } from '../lib/useBackButtonClose'
 
 // Helper de formateo para Peso Colombiano (COP)
 const formatCOP = (val: number | string) => {
@@ -21,6 +22,12 @@ export default function Dashboard() {
   const [showAbono, setShowAbono] = useState(false)
   const [deudoras, setDeudoras] = useState<SaldoPendiente[]>([])
   const [selectedDeuda, setSelectedDeuda] = useState<SaldoPendiente | null>(null)
+
+  useBackButtonClose(showVenta, () => setShowVenta(false), 'dashboard-venta')
+  useBackButtonClose(showAbono, () => {
+    setShowAbono(false)
+    setSelectedDeuda(null)
+  }, 'dashboard-abono')
 
   const loadData = async () => {
     const [stockRes, ventasRes, saldosRes] = await Promise.all([
