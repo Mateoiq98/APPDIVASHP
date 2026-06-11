@@ -7,20 +7,21 @@ import type { Proveedor } from '../types'
 const MAX_FACTURA_IMAGES = 4
 
 const MODEL_PRESETS = [
-  { label: 'Preciso', value: 'google/gemini-3.1-flash-lite' },
-  { label: 'Mas preciso', value: 'google/gemini-3.5-flash' },
-  { label: 'Gratis', value: 'google/gemma-4-31b-it:free' },
-  { label: 'Gratis NVIDIA', value: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free' }
+  { label: 'Llama 3.2 Vision 11B (Gratis)', value: 'meta-llama/llama-3.2-11b-vision-instruct:free' },
+  { label: 'NVIDIA Nemotron 3 (Gratis)', value: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free' },
+  { label: 'Gemini 2.0 Flash (Gratis)', value: 'google/gemini-2.0-flash-exp:free' },
+  { label: 'Gemini 1.5 Flash Lite (Preciso)', value: 'google/gemini-3.1-flash-lite' },
+  { label: 'Gemini 1.5 Flash (Más preciso)', value: 'google/gemini-3.5-flash' }
 ]
 
-const LEGACY_DEFAULT_MODEL = 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free'
-const MODEL_MIGRATION_KEY = 'divashop_ocr_model_migrated_v2'
+const MODEL_MIGRATION_KEY = 'divashop_ocr_model_migrated_v3'
 
 const getInitialOcrModel = () => {
   const saved = localStorage.getItem('openrouter_model')
-  if (!saved) return DEFAULT_OPENROUTER_OCR_MODEL
-  if (saved === LEGACY_DEFAULT_MODEL && !localStorage.getItem(MODEL_MIGRATION_KEY)) {
+  // Forzar cambio al nuevo modelo gratuito por defecto si no se ha migrado a v3
+  if (!saved || !localStorage.getItem(MODEL_MIGRATION_KEY)) {
     localStorage.setItem(MODEL_MIGRATION_KEY, 'true')
+    localStorage.setItem('openrouter_model', DEFAULT_OPENROUTER_OCR_MODEL)
     return DEFAULT_OPENROUTER_OCR_MODEL
   }
   return saved
@@ -107,6 +108,7 @@ export default function FacturaOcrModal({
   const [proveedorNit, setProveedorNit] = useState('')
   const [usarProveedorNuevo, setUsarProveedorNuevo] = useState(false)
   const [model, setModel] = useState(getInitialOcrModel)
+  const [showOcrSettings, setShowOcrSettings] = useState(false)
   const [imageDataUrls, setImageDataUrls] = useState<string[]>([])
   const [dragActive, setDragActive] = useState(false)
   const [items, setItems] = useState<DraftItem[]>([])
@@ -274,31 +276,52 @@ export default function FacturaOcrModal({
         <div className="modal-handle" />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 16 }}>
           <h2 style={{ marginBottom: 0 }}>Factura OCR</h2>
-          <button className="btn-secondary" onClick={onClose} style={{ width: 40, height: 40, minHeight: 40, minWidth: 40, padding: 0 }} aria-label="Cerrar">
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="form-group" style={{ background: 'rgba(133,113,122,0.04)', padding: 12, borderRadius: 12 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Settings size={14} /> Configuracion OCR
-          </label>
-          <div className="form-row">
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <select value={model} onChange={event => setModel(event.target.value)}>
-                {MODEL_PRESETS.map(option => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-                {!MODEL_PRESETS.some(option => option.value === model) && (
-                  <option value={model}>Personalizado</option>
-                )}
-              </select>
-            </div>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <input value={model} onChange={event => setModel(event.target.value)} placeholder="Modelo OpenRouter" />
-            </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              className={`btn-secondary ${showOcrSettings ? 'active' : ''}`}
+              onClick={() => setShowOcrSettings(!showOcrSettings)}
+              style={{
+                width: 40,
+                height: 40,
+                minHeight: 40,
+                minWidth: 40,
+                padding: 0,
+                background: showOcrSettings ? 'var(--rosa-metalico)' : undefined,
+                color: showOcrSettings ? 'white' : undefined
+              }}
+              title="Configuración OCR"
+            >
+              <Settings size={18} />
+            </button>
+            <button className="btn-secondary" onClick={onClose} style={{ width: 40, height: 40, minHeight: 40, minWidth: 40, padding: 0 }} aria-label="Cerrar">
+              <X size={18} />
+            </button>
           </div>
         </div>
+
+        {showOcrSettings && (
+          <div className="form-group" style={{ background: 'rgba(133,113,122,0.04)', padding: 12, borderRadius: 12, marginBottom: 16 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Settings size={14} /> Configuracion OCR
+            </label>
+            <div className="form-row">
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <select value={model} onChange={event => setModel(event.target.value)}>
+                  {MODEL_PRESETS.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                  {!MODEL_PRESETS.some(option => option.value === model) && (
+                    <option value={model}>Personalizado</option>
+                  )}
+                </select>
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <input value={model} onChange={event => setModel(event.target.value)} placeholder="Modelo OpenRouter" />
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="form-group">
           <label>Proveedor</label>

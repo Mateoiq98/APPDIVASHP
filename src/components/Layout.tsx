@@ -193,26 +193,28 @@ export default function Layout() {
         </div>
       )}
 
-      <button
-        className="btn-secondary"
-        onClick={logout}
-        title="Cerrar sesion"
-        aria-label="Cerrar sesion"
-        style={{
-          position: 'fixed',
-          top: 12,
-          right: 'max(12px, calc(50% - 228px))',
-          width: 38,
-          height: 38,
-          minWidth: 38,
-          minHeight: 38,
-          padding: 0,
-          borderRadius: 12,
-          zIndex: 120
-        }}
-      >
-        <LogOut size={17} />
-      </button>
+      {location.pathname === '/' && (
+        <button
+          className="btn-secondary"
+          onClick={logout}
+          title="Cerrar sesion"
+          aria-label="Cerrar sesion"
+          style={{
+            position: 'fixed',
+            top: 12,
+            right: 'max(12px, calc(50% - 228px))',
+            width: 38,
+            height: 38,
+            minWidth: 38,
+            minHeight: 38,
+            padding: 0,
+            borderRadius: 12,
+            zIndex: 120
+          }}
+        >
+          <LogOut size={17} />
+        </button>
+      )}
 
       <Outlet />
       

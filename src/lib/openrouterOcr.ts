@@ -1,7 +1,7 @@
 import { getAuthToken } from './appAuth'
 
 export const DEFAULT_OPENROUTER_OCR_MODEL =
-  import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemini-3.1-flash-lite'
+  import.meta.env.VITE_OPENROUTER_MODEL || 'meta-llama/llama-3.2-11b-vision-instruct:free'
 
 export interface OcrProducto {
   nombre: string
