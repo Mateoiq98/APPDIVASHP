@@ -68,8 +68,7 @@ export default function Dashboard() {
   return (
     <div className="page">
       <div style={{ textAlign: 'center', padding: '20px 0 12px' }}>
-        <img src="/logo.png" alt="Diva Shop" style={{ height: 60, marginBottom: 4 }} />
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--rosa-metalico)' }}>Diva Shop</h1>
+        <img src="/logo-diva-shop-wordmark-compact.png" alt="Diva Shop" style={{ width: 220, maxWidth: '76%', height: 'auto', objectFit: 'contain', filter: 'drop-shadow(0 5px 10px rgba(149, 84, 91, 0.13))' }} />
       </div>
 
       {/* Saludo y Fecha Dinámica */}

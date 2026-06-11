@@ -58,14 +58,13 @@ export default function Login({ onLogin }: { onLogin: (user: AuthUser) => void }
         }
       `}</style>
       <div className="card" style={{ width: '100%', maxWidth: 420, padding: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-          <img src="/logo.png" alt="Diva Shop" style={{ width: 52, height: 52, borderRadius: 12, objectFit: 'cover' }} />
-          <div>
-            <h1 style={{ fontSize: 24, lineHeight: '28px', margin: 0 }}>Diva Shop</h1>
-            <p style={{ color: 'var(--sombra-malva)', fontSize: 13, fontWeight: 700, marginTop: 2 }}>
-              Acceso privado
-            </p>
+        <div style={{ textAlign: 'center', marginBottom: 22 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: 74, padding: '8px 18px', borderRadius: 18, background: 'linear-gradient(135deg, rgba(255,255,255,0.96), rgba(245,183,179,0.12))', border: '1px solid rgba(245,183,179,0.45)' }}>
+            <img src="/logo-diva-shop-wordmark-compact.png" alt="Diva Shop" style={{ width: 230, maxWidth: '100%', height: 'auto', objectFit: 'contain', filter: 'drop-shadow(0 5px 10px rgba(149, 84, 91, 0.14))' }} />
           </div>
+          <p style={{ color: 'var(--sombra-malva)', fontSize: 13, fontWeight: 800, marginTop: 8 }}>
+            Acceso privado
+          </p>
         </div>
 
         <div style={{ position: 'relative', overflow: 'hidden', marginBottom: 22, border: '1px solid rgba(245, 183, 179, 0.7)', borderRadius: 18, padding: 12, background: 'linear-gradient(135deg, rgba(255,255,255,0.96), rgba(253,244,244,0.94))' }}>

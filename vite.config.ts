@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['logo.png'],
+      includeAssets: ['logo.png', 'logo-diva-shop-wordmark.png', 'logo-diva-shop-wordmark-compact.png', 'anniversary-login.jpeg'],
       manifest: {
         name: 'Diva Shop',
         short_name: 'DivaShop',
