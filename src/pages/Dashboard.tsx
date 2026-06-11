@@ -70,6 +70,9 @@ export default function Dashboard() {
       <div style={{ textAlign: 'center', padding: '20px 0 12px' }}>
         <img src="/logo.png" alt="Diva Shop" style={{ height: 60, marginBottom: 4 }} />
         <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--rosa-metalico)' }}>Diva Shop</h1>
+        <p style={{ maxWidth: 360, margin: '8px auto 0', color: 'var(--sombra-malva)', fontSize: 12, lineHeight: '18px', fontWeight: 600 }}>
+          Hecha con amor para celebrar nuestros 5 años, por Hasly y por esta historia bonita que también vive en cada detalle.
+        </p>
       </div>
 
       {/* Saludo y Fecha Dinámica */}

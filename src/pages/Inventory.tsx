@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import type { Producto } from '../types'
-import { FileText, Plus, Search } from 'lucide-react'
+import type { Producto, Proveedor } from '../types'
+import { FileText, Plus, Search, Truck } from 'lucide-react'
 import FacturaOcrModal from '../components/FacturaOcrModal'
 import { useBackButtonClose } from '../lib/useBackButtonClose'
 
@@ -84,11 +84,14 @@ const compressImage = (file: File): Promise<string> => {
 
 export default function Inventory() {
   const [productos, setProductos] = useState<Producto[]>([])
+  const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [filtroStock, setFiltroStock] = useState<'todos' | 'disponibles' | 'agotados'>('todos')
   const [filtroCat, setFiltroCat] = useState('')
+  const [filtroProveedor, setFiltroProveedor] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [showOcr, setShowOcr] = useState(false)
+  const [showProveedorForm, setShowProveedorForm] = useState(false)
   const [editando, setEditando] = useState<Producto | null>(null)
   
   // Estado para previsualizar foto grande
@@ -99,9 +102,13 @@ export default function Inventory() {
     setEditando(null)
   }, 'producto-form')
   useBackButtonClose(showOcr, () => setShowOcr(false), 'factura-ocr')
+  useBackButtonClose(showProveedorForm, () => setShowProveedorForm(false), 'proveedor-form')
   useBackButtonClose(Boolean(previewImage), () => setPreviewImage(null), 'producto-preview')
 
   const load = async () => {
+    const proveedoresRes = await supabase.from('proveedores').select('*').order('nombre')
+    if (proveedoresRes.data) setProveedores(proveedoresRes.data)
+
     const { data, error } = await supabase.from('productos').select('*, proveedores(nombre)').order('nombre')
     if (!error && data) {
       setProductos((data as ProductoWithProveedor[]).map(p => ({
@@ -125,6 +132,9 @@ export default function Inventory() {
     if (filtroCat && p.categoria !== filtroCat) return false
     return true
   }).filter(p => {
+    if (filtroProveedor && p.proveedor_id !== filtroProveedor) return false
+    return true
+  }).filter(p => {
     if (!busqueda) return true
     const keywords = busqueda.toLowerCase().split(/\s+/).filter(Boolean)
     if (keywords.length === 0) return true
@@ -134,7 +144,8 @@ export default function Inventory() {
       const matchTallaColor = p.talla_color.toLowerCase().includes(kw)
       const matchMarca = p.marca ? p.marca.toLowerCase().includes(kw) : false
       const matchCategoria = p.categoria ? p.categoria.toLowerCase().includes(kw) : false
-      return matchNombre || matchTallaColor || matchMarca || matchCategoria
+      const matchProveedor = p.proveedor_nombre ? p.proveedor_nombre.toLowerCase().includes(kw) : false
+      return matchNombre || matchTallaColor || matchMarca || matchCategoria || matchProveedor
     })
   })
 
@@ -143,6 +154,13 @@ export default function Inventory() {
     ...DEFAULT_CATEGORIAS,
     ...productos.map(p => p.categoria).filter(Boolean)
   ])).sort()
+
+  const proveedorActivo = proveedores.find(proveedor => proveedor.id === filtroProveedor)
+  const productosProveedorActivo = filtroProveedor
+    ? productos.filter(producto => producto.proveedor_id === filtroProveedor)
+    : []
+  const unidadesProveedorActivo = productosProveedorActivo.reduce((sum, producto) => sum + producto.stock, 0)
+  const costoProveedorActivo = productosProveedorActivo.reduce((sum, producto) => sum + (Number(producto.precio_costo) * producto.stock), 0)
 
   return (
     <div className="page">
@@ -192,6 +210,59 @@ export default function Inventory() {
             {c}
           </button>
         ))}
+      </div>
+
+      {/* Proveedores */}
+      <div className="card" style={{ padding: 12, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(182,108,112,0.08)', color: 'var(--rosa-metalico)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Truck size={18} />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--negro-elegante)' }}>
+                Proveedores
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--sombra-malva)', fontWeight: 700 }}>
+                {proveedorActivo ? proveedorActivo.nombre : `${proveedores.length} registrados`}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            {filtroProveedor && (
+              <button className="btn-secondary" onClick={() => setFiltroProveedor('')} style={{ height: 34, minHeight: 34, padding: '0 10px', fontSize: 12 }}>
+                Ver todos
+              </button>
+            )}
+            <button className="btn-primary" onClick={() => setShowProveedorForm(true)} style={{ height: 34, minHeight: 34, padding: '0 10px', fontSize: 12 }}>
+              <Plus size={14} /> Nuevo
+            </button>
+          </div>
+        </div>
+
+        <select value={filtroProveedor} onChange={event => setFiltroProveedor(event.target.value)} style={{ marginBottom: filtroProveedor ? 10 : 0 }}>
+          <option value="">Todos los proveedores</option>
+          {proveedores.map(proveedor => (
+            <option key={proveedor.id} value={proveedor.id}>{proveedor.nombre}</option>
+          ))}
+        </select>
+
+        {filtroProveedor && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            <div style={{ background: 'var(--gris-fondo)', border: '1px solid var(--gris-perla)', borderRadius: 10, padding: 8 }}>
+              <div style={{ fontSize: 10, color: 'var(--sombra-malva)', fontWeight: 800 }}>Productos</div>
+              <div style={{ fontSize: 15, fontWeight: 800 }}>{productosProveedorActivo.length}</div>
+            </div>
+            <div style={{ background: 'var(--gris-fondo)', border: '1px solid var(--gris-perla)', borderRadius: 10, padding: 8 }}>
+              <div style={{ fontSize: 10, color: 'var(--sombra-malva)', fontWeight: 800 }}>Unidades</div>
+              <div style={{ fontSize: 15, fontWeight: 800 }}>{unidadesProveedorActivo}</div>
+            </div>
+            <div style={{ background: 'var(--gris-fondo)', border: '1px solid var(--gris-perla)', borderRadius: 10, padding: 8 }}>
+              <div style={{ fontSize: 10, color: 'var(--sombra-malva)', fontWeight: 800 }}>Costo</div>
+              <div style={{ fontSize: 15, fontWeight: 800 }}>{formatCOP(costoProveedorActivo)}</div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -298,6 +369,7 @@ export default function Inventory() {
           onClose={() => setShowForm(false)}
           onSuccess={() => { setShowForm(false); load() }}
           categoriasExistentes={categoriasList}
+          proveedores={proveedores}
         />
       )}
 
@@ -306,6 +378,22 @@ export default function Inventory() {
           categorias={categoriasList}
           onClose={() => setShowOcr(false)}
           onSuccess={() => { setShowOcr(false); load() }}
+        />
+      )}
+
+      {showProveedorForm && (
+        <ProveedorForm
+          proveedores={proveedores}
+          onClose={() => setShowProveedorForm(false)}
+          onSuccess={proveedor => {
+            setProveedores(prev => {
+              const byId = new Map(prev.map(item => [item.id, item]))
+              byId.set(proveedor.id, proveedor)
+              return Array.from(byId.values()).sort((a, b) => a.nombre.localeCompare(b.nombre))
+            })
+            setFiltroProveedor(proveedor.id)
+            setShowProveedorForm(false)
+          }}
         />
       )}
 
@@ -361,16 +449,115 @@ function PackageIconLarge() {
   )
 }
 
+function ProveedorForm({
+  proveedores,
+  onClose,
+  onSuccess
+}: {
+  proveedores: Proveedor[]
+  onClose: () => void
+  onSuccess: (proveedor: Proveedor) => void
+}) {
+  const [nombre, setNombre] = useState('')
+  const [nit, setNit] = useState('')
+  const [telefono, setTelefono] = useState('')
+  const [notas, setNotas] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleSubmit = async () => {
+    const cleanNombre = nombre.trim()
+    if (!cleanNombre) {
+      setError('Escribe el nombre del proveedor.')
+      return
+    }
+
+    const existing = proveedores.find(proveedor => proveedor.nombre.toLowerCase() === cleanNombre.toLowerCase())
+    if (existing) {
+      onSuccess(existing)
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    const { data, error: insertError } = await supabase
+      .from('proveedores')
+      .insert({
+        nombre: cleanNombre,
+        nit: nit.trim(),
+        telefono: telefono.trim(),
+        notas: notas.trim()
+      })
+      .select()
+      .single()
+
+    setLoading(false)
+    if (insertError) {
+      setError(insertError.message.includes('relation "proveedores"')
+        ? 'Falta ejecutar la migracion de proveedores en Supabase.'
+        : insertError.message)
+      return
+    }
+
+    onSuccess(data as Proveedor)
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={event => event.stopPropagation()}>
+        <div className="modal-handle" />
+        <h2>Nuevo Proveedor</h2>
+
+        <div className="form-group">
+          <label>Nombre</label>
+          <input value={nombre} onChange={event => setNombre(event.target.value)} placeholder="Ej: Moda Mayorista Medellin" autoFocus />
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label>NIT / documento</label>
+            <input value={nit} onChange={event => setNit(event.target.value)} placeholder="Opcional" />
+          </div>
+          <div className="form-group">
+            <label>Telefono</label>
+            <input value={telefono} onChange={event => setTelefono(event.target.value)} placeholder="Opcional" inputMode="tel" />
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label>Notas</label>
+          <input value={notas} onChange={event => setNotas(event.target.value)} placeholder="Ej: compra por WhatsApp, contado..." />
+        </div>
+
+        {error && (
+          <div style={{ color: 'var(--color-error)', background: 'var(--fondo-error)', padding: 12, borderRadius: 10, fontSize: 13, fontWeight: 700, marginBottom: 12 }}>
+            {error}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
+          <button className="btn-secondary" onClick={onClose} style={{ flex: 1 }}>Cancelar</button>
+          <button className="btn-primary" onClick={handleSubmit} disabled={loading || !nombre.trim()} style={{ flex: 1 }}>
+            {loading ? 'Guardando...' : 'Crear'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ProductoForm({ 
   producto, 
   onClose, 
   onSuccess,
-  categoriasExistentes 
+  categoriasExistentes,
+  proveedores
 }: { 
   producto: Producto | null
   onClose: () => void
   onSuccess: () => void
   categoriasExistentes: string[]
+  proveedores: Proveedor[]
 }) {
   const [nombre, setNombre] = useState(producto?.nombre || '')
   const [tallaColor, setTallaColor] = useState(producto?.talla_color || '')
@@ -384,6 +571,11 @@ function ProductoForm({
   const [marcaNueva, setMarcaNueva] = useState('')
   const [marcasLista, setMarcasLista] = useState<{ id: string; nombre: string }[]>([])
   const [usarNueva, setUsarNueva] = useState(false)
+
+  const [proveedorSel, setProveedorSel] = useState(producto?.proveedor_id || '')
+  const [proveedorNombre, setProveedorNombre] = useState('')
+  const [proveedorNit, setProveedorNit] = useState('')
+  const [usarNuevoProveedor, setUsarNuevoProveedor] = useState(false)
   
   const [precioCosto, setPrecioCosto] = useState(formatInputCurrency(producto?.precio_costo || ''))
   const [precioVenta, setPrecioVenta] = useState(formatInputCurrency(producto?.precio_venta || ''))
@@ -419,17 +611,63 @@ function ProductoForm({
     }
   }, [producto, categoriasExistentes])
 
+  useEffect(() => {
+    if (!producto?.proveedor_id) return
+    setProveedorSel(producto.proveedor_id)
+    setUsarNuevoProveedor(false)
+  }, [producto?.proveedor_id])
+
   const getMarca = () => usarNueva ? marcaNueva : marcaSel
   const getCategoria = () => usarNuevaCategoria ? categoriaNueva : categoriaSel
+
+  const ensureProveedor = async () => {
+    if (!usarNuevoProveedor) return proveedorSel || null
+    const nombre = proveedorNombre.trim()
+    if (!nombre) return null
+
+    const existing = proveedores.find(proveedor => proveedor.nombre.toLowerCase() === nombre.toLowerCase())
+    if (existing) return existing.id
+
+    const { data, error } = await supabase
+      .from('proveedores')
+      .insert({ nombre, nit: proveedorNit.trim() })
+      .select()
+      .single()
+
+    if (error) throw error
+    return data.id as string
+  }
 
   const handleSubmit = async () => {
     const catFinal = getCategoria()
     if (!nombre || !tallaColor || !precioVenta || !catFinal) return
     setLoading(true)
     const marcaFinal = getMarca()
-    if (!marcaFinal) return
+    if (!marcaFinal) {
+      setLoading(false)
+      return
+    }
 
-    const payload = {
+    let finalProveedorId: string | null
+    try {
+      finalProveedorId = await ensureProveedor()
+    } catch (error) {
+      setLoading(false)
+      alert('Error al guardar proveedor: ' + (error instanceof Error ? error.message : 'No se pudo guardar.'))
+      return
+    }
+
+    const payload: {
+      nombre: string
+      talla_color: string
+      categoria: string
+      marca: string
+      precio_costo: number
+      precio_venta: number
+      stock: number
+      imagen: string
+      proveedor_id?: string | null
+    } = {
       nombre,
       talla_color: tallaColor,
       categoria: catFinal,
@@ -438,6 +676,10 @@ function ProductoForm({
       precio_venta: parseCurrency(precioVenta),
       stock: parseInt(stock) || 0,
       imagen
+    }
+
+    if (finalProveedorId || producto?.proveedor_id) {
+      payload.proveedor_id = finalProveedorId
     }
     
     const { error } = producto
@@ -637,6 +879,54 @@ function ProductoForm({
                   Usar existente
                 </button>
               )}
+            </div>
+          )}
+        </div>
+
+        <div className="form-group">
+          <label>Proveedor</label>
+          {!usarNuevoProveedor ? (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <select value={proveedorSel} onChange={e => setProveedorSel(e.target.value)} style={{ flex: 1 }}>
+                <option value="">Sin proveedor</option>
+                {proveedores.map(proveedor => (
+                  <option key={proveedor.id} value={proveedor.id}>{proveedor.nombre}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setUsarNuevoProveedor(true)}
+                style={{ padding: '0 12px', minWidth: 'unset', fontSize: 13, whiteSpace: 'nowrap' }}
+              >
+                + Nuevo
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <input
+                value={proveedorNombre}
+                onChange={e => setProveedorNombre(e.target.value)}
+                placeholder="Nombre del proveedor"
+              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  value={proveedorNit}
+                  onChange={e => setProveedorNit(e.target.value)}
+                  placeholder="NIT / documento"
+                  style={{ flex: 1 }}
+                />
+                {proveedores.length > 0 && (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setUsarNuevoProveedor(false)}
+                    style={{ padding: '0 12px', minWidth: 'unset', fontSize: 13, whiteSpace: 'nowrap' }}
+                  >
+                    Existente
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
